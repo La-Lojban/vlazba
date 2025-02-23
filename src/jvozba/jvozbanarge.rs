@@ -78,7 +78,7 @@ fn is_forbidden(d: &LujvoAndScore, forbid_la_lai_doi: bool) -> bool {
 
 #[inline]
 fn is_cmevla(valsi: &str) -> bool {
-    valsi.chars().last().map_or(false, |c| !"aeiouy'".contains(c))
+    valsi.chars().last().is_some_and(|c| !"aeiouy'".contains(c))
 }
 
 pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
@@ -91,18 +91,22 @@ pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
         let end = rafsi.chars().last().unwrap();
         let init = result[0].chars().next().unwrap();
 
-        if is_4letter(rafsi) 
-            || (is_c(end) && is_c(init) && is_permissible(end, init) == 0)
-            || (end == 'n' && ["ts", "tc", "dz", "dj"].iter().any(|&s| result[0].starts_with(s)))
-            || (i == rafsi_list.len() - 2 && is_cvv(rafsi) && should_add_hyphen(rafsi_list, &result))
-            || (i == rafsi_list.len() - 2 && is_cvc(rafsi) && is_tosmabru(rafsi, &result))
-        {
+        if is_4letter(rafsi) {
+            result.insert(0, "y".to_string());
+        } else if is_c(end) && is_c(init) && is_permissible(end, init) == 0 {
+            result.insert(0, "y".to_string());
+        } else if end == 'n' && ["ts", "tc", "dz", "dj"].iter().any(|&s| result[0].starts_with(s)) {
             result.insert(0, "y".to_string());
         }
 
-        if i == rafsi_list.len() - 2 && is_cvv(rafsi) && should_add_hyphen(rafsi_list, &result) {
+        // Handle CVV case for first rafsi separately
+        if i == rafsi_list.len() - 2 && is_cvv(rafsi) {
             let hyphen = if result[0].starts_with('r') { "n" } else { "r" };
-            result.insert(0, hyphen.to_string());
+            if rafsi_list.len() > 2 || !is_ccv(&result[0]) {
+                result.insert(0, hyphen.to_string());
+            }
+        } else if i == rafsi_list.len() - 2 && is_cvc(rafsi) && is_tosmabru(rafsi, &result) {
+            result.insert(0, "y".to_string());
         }
 
         result.insert(0, rafsi.clone());

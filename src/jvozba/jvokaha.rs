@@ -96,3 +96,32 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(res)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_lujvo_bramlatu() {
+        assert_eq!(
+            jvokaha("bramlatu").unwrap(),
+            vec!["bra", "mlatu"]
+        );
+    }
+
+    #[test]
+    fn test_valid_lujvo_toirbroda() {
+        assert_eq!(
+            jvokaha("toirbroda").unwrap(),
+            vec!["toi", "r", "broda"]
+        );
+    }
+
+    #[test]
+    fn test_valid_lujvo_ca_irgau() {
+        assert_eq!(
+            jvokaha("ca'irgau").unwrap(),
+            vec!["ca'i", "r", "gau"]
+        );
+    }
+}
+

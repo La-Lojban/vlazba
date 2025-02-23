@@ -114,7 +114,7 @@ impl GismuGenerator {
             .zip(shape.chars().skip(1))
             .enumerate()
             .filter_map(|(i, (c1, c2))| {
-                if c1.to_ascii_lowercase() == 'c' && c2.to_ascii_lowercase() == 'c' {
+                if c1.eq_ignore_ascii_case(&'c') && c2.eq_ignore_ascii_case(&'c') {
                     let mut p: Vec<Predicate> = vec![Box::new(self.validator_for_cc(i))];
                     if shape.chars().nth(i + 2) == Some('c') {
                         p.push(Box::new(self.validator_for_ccc(i)));
@@ -275,8 +275,7 @@ impl<'a> GismuMatcher<'a> {
     fn match_structural_pattern(&self, letter: &str, c: char) -> bool {
         SIMILARITIES
             .iter()
-            .find(|&&(key, _)| key == c.to_ascii_lowercase())
-            .map_or(false, |&(_, pattern)| {
+            .find(|&&(key, _)| key == c.to_ascii_lowercase()).is_some_and(|&(_, pattern)| {
                 pattern.contains(letter) || pattern.is_empty()
             })
     }
