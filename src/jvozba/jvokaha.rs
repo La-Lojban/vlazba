@@ -57,19 +57,19 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
         }
 
         // Drop rafsi from front
-        if get_cv_info(&lujvo[0..3]) == "CVV" && ["ai", "ei", "oi", "au"].contains(&&lujvo[1..3]) {
+        if lujvo.len() >= 3 && (get_cv_info(&lujvo[0..3]) == "CVV" && ["ai", "ei", "oi", "au"].contains(&&lujvo[1..3])) {
             res.push(lujvo[0..3].to_string());
             lujvo = lujvo[3..].to_string();
             continue;
         }
 
-        if get_cv_info(&lujvo[0..4]) == "CV'V" {
+        if lujvo.len() >= 4 && get_cv_info(&lujvo[0..4]) == "CV'V" {
             res.push(lujvo[0..4].to_string());
             lujvo = lujvo[4..].to_string();
             continue;
         }
 
-        if get_cv_info(&lujvo[0..5]) == "CVCCY" || get_cv_info(&lujvo[0..5]) == "CCVCY" {
+        if lujvo.len() >= 5 && (get_cv_info(&lujvo[0..5]) == "CVCCY" || get_cv_info(&lujvo[0..5]) == "CCVCY") {
             res.push(lujvo[0..4].to_string());
             res.push("y".to_string());
             lujvo = lujvo[5..].to_string();
@@ -81,13 +81,12 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
             return Ok(res);
         }
 
-        if get_cv_info(&lujvo[0..3]) == "CVC" || get_cv_info(&lujvo[0..3]) == "CCV" {
+        if lujvo.len() >= 3 && (get_cv_info(&lujvo[0..3]) == "CVC" || get_cv_info(&lujvo[0..3]) == "CCV") {
             res.push(lujvo[0..3].to_string());
             lujvo = lujvo[3..].to_string();
             continue;
         }
 
-        println!("{:?}, {}", res, lujvo);
         return Err(Box::new(LujvoError {
             message: format!("Failed to decompose {{{}}}", original_lujvo),
         }));
@@ -122,6 +121,11 @@ mod tests {
             jvokaha("ca'irgau").unwrap(),
             vec!["ca'i", "r", "gau"]
         );
+    }
+
+    #[test]
+    fn test_invalid_klasr() {
+        assert!(jvokaha("klasr").is_err());
     }
 }
 

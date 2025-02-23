@@ -91,11 +91,10 @@ pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
         let end = rafsi.chars().last().unwrap();
         let init = result[0].chars().next().unwrap();
 
-        if is_4letter(rafsi) {
-            result.insert(0, "y".to_string());
-        } else if is_c(end) && is_c(init) && is_permissible(end, init) == 0 {
-            result.insert(0, "y".to_string());
-        } else if end == 'n' && ["ts", "tc", "dz", "dj"].iter().any(|&s| result[0].starts_with(s)) {
+        if is_4letter(rafsi)
+            || (is_c(end) && is_c(init) && is_permissible(end, init) == 0)
+            || (end == 'n' && ["ts", "tc", "dz", "dj"].iter().any(|&s| result[0].starts_with(s)))
+        {
             result.insert(0, "y".to_string());
         }
 
@@ -113,11 +112,6 @@ pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
     }
 
     result
-}
-
-#[inline]
-fn should_add_hyphen(rafsi_list: &[String], result: &[String]) -> bool {
-    rafsi_list.len() > 2 || !is_ccv(&result[0])
 }
 
 fn is_tosmabru(rafsi: &str, rest: &[String]) -> bool {
