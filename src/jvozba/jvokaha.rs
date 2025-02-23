@@ -18,18 +18,17 @@ impl fmt::Display for LujvoError {
 impl Error for LujvoError {}
 
 /// Split a lujvo into its constituent rafsi
-/// 
+///
 /// # Arguments
 /// * `lujvo` - The compound word to analyze
-/// 
+///
 /// # Returns
 /// Result with vector of rafsi or error message
 pub fn jvokaha(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let arr = jvokaha2(lujvo)?;
     let rafsi_list: Vec<String> = arr.iter().filter(|a| a.len() != 1).cloned().collect();
 
-    let correct_lujvo = normalize(&rafsi_list).join("");
-
+    let correct_lujvo = normalize(&rafsi_list)?.join("");
     if lujvo == correct_lujvo {
         Ok(arr)
     } else {
@@ -49,15 +48,22 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
 
     while !lujvo.is_empty() {
         // Remove hyphen
-        if !res.is_empty() && res.last().unwrap().len() != 1 && (lujvo.starts_with('y')
-                || lujvo.starts_with("nr") || (lujvo.starts_with('r') && get_cv_info(&lujvo[1..2]) == "C")) {
+        if !res.is_empty()
+            && res.last().unwrap().len() != 1
+            && (lujvo.starts_with('y')
+                || lujvo.starts_with("nr")
+                || (lujvo.starts_with('r') && get_cv_info(&lujvo[1..2]) == "C"))
+        {
             res.push(lujvo[0..1].to_string());
             lujvo = lujvo[1..].to_string();
             continue;
         }
 
         // Drop rafsi from front
-        if lujvo.len() >= 3 && (get_cv_info(&lujvo[0..3]) == "CVV" && ["ai", "ei", "oi", "au"].contains(&&lujvo[1..3])) {
+        if lujvo.len() >= 3
+            && (get_cv_info(&lujvo[0..3]) == "CVV"
+                && ["ai", "ei", "oi", "au"].contains(&&lujvo[1..3]))
+        {
             res.push(lujvo[0..3].to_string());
             lujvo = lujvo[3..].to_string();
             continue;
@@ -69,7 +75,9 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
             continue;
         }
 
-        if lujvo.len() >= 5 && (get_cv_info(&lujvo[0..5]) == "CVCCY" || get_cv_info(&lujvo[0..5]) == "CCVCY") {
+        if lujvo.len() >= 5
+            && (get_cv_info(&lujvo[0..5]) == "CVCCY" || get_cv_info(&lujvo[0..5]) == "CCVCY")
+        {
             res.push(lujvo[0..4].to_string());
             res.push("y".to_string());
             lujvo = lujvo[5..].to_string();
@@ -81,7 +89,9 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
             return Ok(res);
         }
 
-        if lujvo.len() >= 3 && (get_cv_info(&lujvo[0..3]) == "CVC" || get_cv_info(&lujvo[0..3]) == "CCV") {
+        if lujvo.len() >= 3
+            && (get_cv_info(&lujvo[0..3]) == "CVC" || get_cv_info(&lujvo[0..3]) == "CCV")
+        {
             res.push(lujvo[0..3].to_string());
             lujvo = lujvo[3..].to_string();
             continue;
@@ -101,31 +111,26 @@ mod tests {
 
     #[test]
     fn test_valid_lujvo_bramlatu() {
-        assert_eq!(
-            jvokaha("bramlatu").unwrap(),
-            vec!["bra", "mlatu"]
-        );
+        assert_eq!(jvokaha("bramlatu").unwrap(), vec!["bra", "mlatu"]);
     }
 
     #[test]
     fn test_valid_lujvo_toirbroda() {
-        assert_eq!(
-            jvokaha("toirbroda").unwrap(),
-            vec!["toi", "r", "broda"]
-        );
+        assert_eq!(jvokaha("toirbroda").unwrap(), vec!["toi", "r", "broda"]);
     }
 
     #[test]
     fn test_valid_lujvo_ca_irgau() {
-        assert_eq!(
-            jvokaha("ca'irgau").unwrap(),
-            vec!["ca'i", "r", "gau"]
-        );
+        assert_eq!(jvokaha("ca'irgau").unwrap(), vec!["ca'i", "r", "gau"]);
     }
 
     #[test]
     fn test_invalid_klasr() {
         assert!(jvokaha("klasr").is_err());
     }
-}
 
+    #[test]
+    fn test_invalid_empty() {
+        assert!(jvokaha("").is_err());
+    }
+}

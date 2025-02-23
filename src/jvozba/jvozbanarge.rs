@@ -1,8 +1,8 @@
 use super::{scoring::get_lujvo_score, tools};
-use tools::{create_every_possibility, get_candid};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
+use tools::{create_every_possibility, get_candid};
 
 static PERMISSIBILITY_TABLE: Lazy<HashMap<char, HashMap<char, i32>>> = Lazy::new(|| {
     let json: Value = serde_json::from_str(include_str!("permissible.json"))
@@ -11,19 +11,25 @@ static PERMISSIBILITY_TABLE: Lazy<HashMap<char, HashMap<char, i32>>> = Lazy::new
         .unwrap()
         .iter()
         .map(|(k, v)| {
-            (k.chars().next().unwrap(),
-             v.as_object()
-                .unwrap()
-                .iter()
-                .map(|(k2, v2)| (k2.chars().next().unwrap(), v2.as_i64().unwrap() as i32))
-                .collect())
+            (
+                k.chars().next().unwrap(),
+                v.as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(k2, v2)| (k2.chars().next().unwrap(), v2.as_i64().unwrap() as i32))
+                    .collect(),
+            )
         })
         .collect()
 });
 
 #[inline]
 fn is_permissible(c1: char, c2: char) -> i32 {
-    PERMISSIBILITY_TABLE.get(&c1).and_then(|row| row.get(&c2)).copied().unwrap_or(0)
+    PERMISSIBILITY_TABLE
+        .get(&c1)
+        .and_then(|row| row.get(&c2))
+        .copied()
+        .unwrap_or(0)
 }
 
 #[derive(Debug, Clone)]
@@ -33,27 +39,28 @@ pub struct LujvoAndScore {
 }
 
 /// Generate possible lujvo combinations from a list of selrafsi
-/// 
+///
 /// # Arguments
 /// * `arr` - List of selrafsi (Lojban root words)
 /// * `forbid_la_lai_doi` - Whether to forbid certain cmavo in lujvo
 /// * `exp_rafsi` - Whether to include experimental rafsi
-/// 
+///
 /// # Returns
 /// Vector of LujvoAndScore structs sorted by best score first
 pub fn jvozba(arr: &[String], forbid_la_lai_doi: bool, exp_rafsi: bool) -> Vec<LujvoAndScore> {
-    let candid_arr: Vec<Vec<String>> = arr.iter().enumerate()
+    let candid_arr: Vec<Vec<String>> = arr
+        .iter()
+        .enumerate()
         .map(|(i, selrafsi)| get_candid(selrafsi, i == arr.len() - 1, exp_rafsi))
         .collect();
 
     let mut answers: Vec<LujvoAndScore> = create_every_possibility(candid_arr)
         .into_iter()
-        .map(|rafsi_list| {
-            let result = normalize(&rafsi_list);
-            LujvoAndScore {
+        .filter_map(|rafsi_list| {
+            normalize(&rafsi_list).ok().map(|result| LujvoAndScore {
                 lujvo: result.join(""),
                 score: get_lujvo_score(&result),
-            }
+            })
         })
         .filter(|d| !is_forbidden(d, forbid_la_lai_doi))
         .collect();
@@ -81,8 +88,10 @@ fn is_cmevla(valsi: &str) -> bool {
     valsi.chars().last().is_some_and(|c| !"aeiouy'".contains(c))
 }
 
-pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
-    assert!(rafsi_list.len() >= 2, "You need at least two valsi to make a lujvo");
+pub fn normalize(rafsi_list: &[String]) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    if rafsi_list.len() < 2 {
+        return Err("You need at least two valsi to make a lujvo".into());
+    }
 
     let mut result: Vec<String> = Vec::with_capacity(rafsi_list.len() * 2 - 1);
     result.push(rafsi_list.last().unwrap().clone());
@@ -93,7 +102,10 @@ pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
 
         if is_4letter(rafsi)
             || (is_c(end) && is_c(init) && is_permissible(end, init) == 0)
-            || (end == 'n' && ["ts", "tc", "dz", "dj"].iter().any(|&s| result[0].starts_with(s)))
+            || (end == 'n'
+                && ["ts", "tc", "dz", "dj"]
+                    .iter()
+                    .any(|&s| result[0].starts_with(s)))
         {
             result.insert(0, "y".to_string());
         }
@@ -111,7 +123,7 @@ pub fn normalize(rafsi_list: &[String]) -> Vec<String> {
         result.insert(0, rafsi.clone());
     }
 
-    result
+    Ok(result)
 }
 
 fn is_tosmabru(rafsi: &str, rest: &[String]) -> bool {
@@ -119,14 +131,17 @@ fn is_tosmabru(rafsi: &str, rest: &[String]) -> bool {
         return false;
     }
 
-    let index = rest.iter()
+    let index = rest
+        .iter()
         .position(|s| !is_cvc(s))
         .unwrap_or_else(|| panic!("Cannot happen"));
 
     if index < rest.len() {
         let s = &rest[index];
-        if s != "y" && (get_cv_info(s) != "CVCCV" 
-            || is_permissible(s.chars().nth(2).unwrap(), s.chars().nth(3).unwrap()) != 2) {
+        if s != "y"
+            && (get_cv_info(s) != "CVCCV"
+                || is_permissible(s.chars().nth(2).unwrap(), s.chars().nth(3).unwrap()) != 2)
+        {
             return false;
         }
     }
@@ -186,4 +201,21 @@ fn get_cv_info(v: &str) -> String {
             _ => panic!("Unexpected character: {}", c),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_jvozba_klama_gasnu() {
+        let input = vec!["klama".to_string(), "gasnu".to_string()];
+        let result = jvozba(&input, false, false);
+
+        assert!(
+            !result.is_empty(),
+            "jvozba should return at least one result"
+        );
+        assert_eq!(result[0].lujvo, "klagau", "First result should be 'klagau'");
+    }
 }
