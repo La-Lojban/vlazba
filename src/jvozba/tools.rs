@@ -71,7 +71,7 @@ pub fn get_candid(selrafsi: &str, is_last: bool, exp_rafsi: bool) -> Vec<String>
             candid.push(gismu.to_string());
         }
 
-        let chopped = gismu[..gismu.len() - 1].to_string();
+        let chopped = gismu.chars().take(gismu.chars().count() - 1).collect::<String>();
         if chopped != "brod" {
             candid.push(chopped);
         }

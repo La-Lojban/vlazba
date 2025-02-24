@@ -50,51 +50,70 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
         // Remove hyphen
         if !res.is_empty()
             && res.last().unwrap().len() != 1
-            && (lujvo.starts_with('y')
-                || lujvo.starts_with("nr")
-                || (lujvo.starts_with('r') && get_cv_info(&lujvo[1..2]) == "C"))
         {
-            res.push(lujvo[0..1].to_string());
-            lujvo = lujvo[1..].to_string();
-            continue;
+            let first_char = lujvo.chars().next().ok_or_else(|| LujvoError {
+                message: "Unexpected end of input".to_string(),
+            })?;
+            
+            let second_char = lujvo.chars().nth(1);
+            
+            if first_char == 'y'
+                || (first_char == 'n' && second_char == Some('r'))
+                || (first_char == 'r' && second_char.is_some_and(|c| get_cv_info(&c.to_string()) == "C"))
+            {
+                res.push(first_char.to_string());
+                lujvo = lujvo.chars().skip(1).collect();
+                continue;
+            }
         }
 
         // Drop rafsi from front
-        if lujvo.len() >= 3
-            && (get_cv_info(&lujvo[0..3]) == "CVV"
-                && ["ai", "ei", "oi", "au"].contains(&&lujvo[1..3]))
-        {
-            res.push(lujvo[0..3].to_string());
-            lujvo = lujvo[3..].to_string();
-            continue;
+        if lujvo.chars().count() >= 3 {
+            let first_three: String = lujvo.chars().take(3).collect();
+            if get_cv_info(&first_three) == "CVV" {
+                let middle_two: String = lujvo.chars().skip(1).take(2).collect();
+                if ["ai", "ei", "oi", "au"].contains(&middle_two.as_str()) {
+                    res.push(first_three);
+                    lujvo = lujvo.chars().skip(3).collect();
+                    continue;
+                }
+            }
         }
 
-        if lujvo.len() >= 4 && get_cv_info(&lujvo[0..4]) == "CV'V" {
-            res.push(lujvo[0..4].to_string());
-            lujvo = lujvo[4..].to_string();
-            continue;
+        if lujvo.chars().count() >= 4 {
+            let first_four: String = lujvo.chars().take(4).collect();
+            if get_cv_info(&first_four) == "CV'V" {
+                res.push(first_four);
+                lujvo = lujvo.chars().skip(4).collect();
+                continue;
+            }
         }
 
-        if lujvo.len() >= 5
-            && (get_cv_info(&lujvo[0..5]) == "CVCCY" || get_cv_info(&lujvo[0..5]) == "CCVCY")
-        {
-            res.push(lujvo[0..4].to_string());
-            res.push("y".to_string());
-            lujvo = lujvo[5..].to_string();
-            continue;
+        if lujvo.chars().count() >= 5 {
+            let first_five: String = lujvo.chars().take(5).collect();
+            if get_cv_info(&first_five) == "CVCCY" || get_cv_info(&first_five) == "CCVCY" {
+                let first_four: String = lujvo.chars().take(4).collect();
+                res.push(first_four);
+                res.push("y".to_string());
+                lujvo = lujvo.chars().skip(5).collect();
+                continue;
+            }
         }
 
-        if get_cv_info(&lujvo) == "CVCCV" || get_cv_info(&lujvo) == "CCVCV" {
+        let cv_info = get_cv_info(&lujvo);
+        if cv_info == "CVCCV" || cv_info == "CCVCV" {
             res.push(lujvo);
             return Ok(res);
         }
 
-        if lujvo.len() >= 3
-            && (get_cv_info(&lujvo[0..3]) == "CVC" || get_cv_info(&lujvo[0..3]) == "CCV")
-        {
-            res.push(lujvo[0..3].to_string());
-            lujvo = lujvo[3..].to_string();
-            continue;
+        if lujvo.chars().count() >= 3 {
+            let first_three: String = lujvo.chars().take(3).collect();
+            let cv_info = get_cv_info(&first_three);
+            if cv_info == "CVC" || cv_info == "CCV" {
+                res.push(first_three);
+                lujvo = lujvo.chars().skip(3).collect();
+                continue;
+            }
         }
 
         return Err(Box::new(LujvoError {
@@ -125,6 +144,16 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_lujvo_with_y_hyphen() {
+        assert_eq!(jvokaha("klamyseltru").unwrap(), vec!["klam", "y", "sel", "tru"]);
+    }
+
+    #[test]
+    fn test_valid_lujvo_with_nr_hyphen() {
+        assert!(jvokaha("toinrbroda").is_err());
+    }
+
+    #[test]
     fn test_invalid_klasr() {
         assert!(jvokaha("klasr").is_err());
     }
@@ -132,5 +161,41 @@ mod tests {
     #[test]
     fn test_invalid_empty() {
         assert!(jvokaha("").is_err());
+    }
+
+    #[test]
+    fn test_invalid_cyrillic() {
+        assert!(jvokaha("щя").is_err());
+    }
+
+    #[test]
+    fn test_invalid_multibyte() {
+        // Test with a multibyte character sequence
+        assert!(jvokaha("café").is_err());
+        // Test with a Japanese character
+        assert!(jvokaha("日本語").is_err());
+        // Test with emoji
+        assert!(jvokaha("😀").is_err());
+    }
+
+    #[test]
+    fn test_invalid_short_lujvo() {
+        assert!(jvokaha("la").is_err());
+    }
+
+    #[test]
+    fn test_invalid_rafsi_sequence() {
+        assert!(jvokaha("klamrseltru").is_err());
+    }
+
+    #[test]
+    fn test_jvokaha2_valid() {
+        let result = jvokaha2("bramlatu").unwrap();
+        assert_eq!(result, vec!["bra", "mlatu"]);
+    }
+
+    #[test]
+    fn test_jvokaha2_invalid() {
+        assert!(jvokaha2("invalid").is_err());
     }
 }

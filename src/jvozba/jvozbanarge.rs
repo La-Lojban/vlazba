@@ -85,7 +85,7 @@ fn is_forbidden(d: &LujvoAndScore, forbid_la_lai_doi: bool) -> bool {
 
 #[inline]
 fn is_cmevla(valsi: &str) -> bool {
-    valsi.chars().last().is_some_and(|c| !"aeiouy'".contains(c))
+    valsi.chars().last().is_some_and(is_c)
 }
 
 pub fn normalize(rafsi_list: &[String]) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -212,11 +212,29 @@ mod tests {
         let input = vec!["klama".to_string(), "gasnu".to_string()];
         let result = jvozba(&input, false, false);
 
-        assert!(
-            !result.is_empty(),
-            "jvozba should return at least one result"
-        );
+        assert!(!result.is_empty(), "jvozba should return at least one result");
         assert_eq!(result[0].lujvo, "klagau", "First result should be 'klagau'");
+    }
+
+    #[test]
+    fn test_jvozba_single_word() {
+        let input = vec!["klama".to_string()];
+        let result = jvozba(&input, false, false);
+        assert!(result.is_empty(), "Single word should return empty result");
+    }
+
+    #[test]
+    fn test_jvozba_empty_input() {
+        let input: Vec<String> = vec![];
+        let result = jvozba(&input, false, false);
+        assert!(result.is_empty(), "Empty input should return empty result");
+    }
+
+    #[test]
+    fn test_jvozba_experimental_rafsi() {
+        let input = vec!["klama".to_string(), "gasnu".to_string()];
+        let result = jvozba(&input, false, true);
+        assert!(!result.is_empty(), "Should include experimental rafsi");
     }
 
     #[test]
@@ -225,5 +243,30 @@ mod tests {
         let rafsi = "tos";
         let rest = vec!["mabru".to_string()];
         assert!(is_tosmabru(rafsi, &rest), "'tosmabru' should be a valid tosmabru");
+
+        // Test invalid case
+        let rafsi = "bad";
+        let rest = vec!["example".to_string()];
+        assert!(!is_tosmabru(rafsi, &rest), "Invalid tosmabru case should return false");
+    }
+
+    #[test]
+    fn test_normalize() {
+        let input = vec!["slak".to_string(), "gau".to_string()];
+        let result = normalize(&input).unwrap();
+        assert_eq!(result, vec!["slak", "y", "gau"], "Normalization should insert y-hyphen");
+    }
+
+    #[test]
+    fn test_normalize_error() {
+        let input = vec!["klama".to_string()];
+        let result = normalize(&input);
+        assert!(result.is_err(), "Normalizing single word should error");
+    }
+
+    #[test]
+    fn test_is_cmevla() {
+        assert!(is_cmevla("klaman"), "Should recognize cmevla");
+        assert!(!is_cmevla("klama"), "Should recognize non-cmevla");
     }
 }
