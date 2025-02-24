@@ -6,7 +6,13 @@ fn main() {
         &["klama".to_string(), "gasnu".to_string()], 
         false, 
         false,
-        true
+        &jvozba::tools::RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        }
     );
     
     println!("Top lujvo candidate: {}", results[0].lujvo);

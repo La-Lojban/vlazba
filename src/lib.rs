@@ -4,9 +4,15 @@ A Rust implementation of Lojban lujvo (compound word) generation and analysis.
 # Examples
 
 ```rust
-use vlazba::jvozba::{jvozba, LujvoAndScore};
+use vlazba::jvozba::{jvozba, LujvoAndScore, tools::RafsiOptions};
 
-let result = jvozba(&["klama".to_string(), "gasnu".to_string()], false, false, false);
+let result = jvozba(&["klama".to_string(), "gasnu".to_string()], false, false, &RafsiOptions {
+            exp_rafsi: false,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        });
 assert!(result.iter().any(|r| r.lujvo == "klagau"));
 ```
 

@@ -1,4 +1,4 @@
-use super::{scoring::get_lujvo_score, tools};
+use super::{scoring::get_lujvo_score, tools::{self, RafsiOptions}};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -47,11 +47,16 @@ pub struct LujvoAndScore {
 ///
 /// # Returns
 /// Vector of LujvoAndScore structs sorted by best score first
-pub fn jvozba(arr: &[String], forbid_la_lai_doi: bool, exp_rafsi: bool, forbid_cmevla: bool) -> Vec<LujvoAndScore> {
+pub fn jvozba(
+    arr: &[String],
+    forbid_la_lai_doi: bool,
+    forbid_cmevla: bool,
+    options: &RafsiOptions,
+) -> Vec<LujvoAndScore> {
     let candid_arr: Vec<Vec<String>> = arr
         .iter()
         .enumerate()
-        .map(|(i, selrafsi)| get_candid(selrafsi, i == arr.len() - 1, exp_rafsi))
+        .map(|(i, selrafsi)| get_candid(selrafsi, i == arr.len() - 1, options))
         .collect();
 
     let mut answers: Vec<LujvoAndScore> = create_every_possibility(candid_arr)
@@ -210,31 +215,83 @@ mod tests {
     #[test]
     fn test_jvozba_klama_gasnu() {
         let input = vec!["klama".to_string(), "gasnu".to_string()];
-        let result = jvozba(&input, false, false, true);
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let result = jvozba(&input, false, false, &options);
 
-        assert!(!result.is_empty(), "jvozba should return at least one result");
+        assert!(
+            !result.is_empty(),
+            "jvozba should return at least one result"
+        );
         assert_eq!(result[0].lujvo, "klagau", "First result should be 'klagau'");
     }
 
     #[test]
     fn test_jvozba_single_word() {
         let input = vec!["klama".to_string()];
-        let result = jvozba(&input, false, false, true);
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let result = jvozba(&input, false, false, &options);
         assert!(result.is_empty(), "Single word should return empty result");
     }
 
     #[test]
     fn test_jvozba_empty_input() {
         let input: Vec<String> = vec![];
-        let result = jvozba(&input, false, false, true);
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let result = jvozba(&input, false, false, &options);
         assert!(result.is_empty(), "Empty input should return empty result");
     }
 
     #[test]
     fn test_jvozba_experimental_rafsi() {
         let input = vec!["klama".to_string(), "gasnu".to_string()];
-        let result = jvozba(&input, false, true, true);
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let result = jvozba(&input, false, false, &options);
         assert!(!result.is_empty(), "Should include experimental rafsi");
+    }
+
+    #[test]
+    fn test_jvozba_custom_gismu() {
+        let mut custom_gismu = HashMap::new();
+        custom_gismu.insert("klama".into(), vec!["qla".into()]);
+        let mut custom_gismu_exp = HashMap::new();
+        custom_gismu_exp.insert("gasnu".into(), vec!["gasn".into()]);
+        
+        let input = vec!["klama".to_string(), "gasnu".to_string()];
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: Some(&custom_gismu),
+            custom_gismu_exp: Some(&custom_gismu_exp),
+        };
+        
+        let result = jvozba(&input, false, false, &options);
+        assert!(!result.is_empty(), "Should use custom gismu rafsi");
+        assert!(result.iter().any(|r| r.lujvo == "qlagasnu"), "Expected custom rafsi combination");
     }
 
     #[test]
@@ -242,19 +299,29 @@ mod tests {
         // Test a valid tosmabru case
         let rafsi = "tos";
         let rest = vec!["mabru".to_string()];
-        assert!(is_tosmabru(rafsi, &rest), "'tosmabru' should be a valid tosmabru");
+        assert!(
+            is_tosmabru(rafsi, &rest),
+            "'tosmabru' should be a valid tosmabru"
+        );
 
         // Test invalid case
         let rafsi = "bad";
         let rest = vec!["example".to_string()];
-        assert!(!is_tosmabru(rafsi, &rest), "Invalid tosmabru case should return false");
+        assert!(
+            !is_tosmabru(rafsi, &rest),
+            "Invalid tosmabru case should return false"
+        );
     }
 
     #[test]
     fn test_normalize() {
         let input = vec!["slak".to_string(), "gau".to_string()];
         let result = normalize(&input).unwrap();
-        assert_eq!(result, vec!["slak", "y", "gau"], "Normalization should insert y-hyphen");
+        assert_eq!(
+            result,
+            vec!["slak", "y", "gau"],
+            "Normalization should insert y-hyphen"
+        );
     }
 
     #[test]

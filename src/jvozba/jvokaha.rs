@@ -2,7 +2,7 @@ use crate::jvozba::scoring::get_cv_info;
 use std::error::Error;
 use std::fmt;
 
-use super::jvozbanarge::normalize;
+use super::narge::normalize;
 
 #[derive(Debug)]
 struct LujvoError {
@@ -25,7 +25,7 @@ impl Error for LujvoError {}
 /// # Returns
 /// Result with vector of rafsi or error message
 pub fn jvokaha(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    let arr = jvokaha2(lujvo)?;
+    let arr = decompose_into_rafsi(lujvo)?;
     let rafsi_list: Vec<String> = arr.iter().filter(|a| a.len() != 1).cloned().collect();
 
     let correct_lujvo = normalize(&rafsi_list)?.join("");
@@ -41,7 +41,9 @@ pub fn jvokaha(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
     }
 }
 
-fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
+/// Internal decomposition implementation that returns raw rafsi including hyphens
+/// Returns Ok even if the lujvo needs normalization (validation is done in outer function)
+fn decompose_into_rafsi(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let original_lujvo = lujvo.to_string();
     let mut res: Vec<String> = Vec::new();
     let mut lujvo = lujvo.to_string();
@@ -54,9 +56,9 @@ fn jvokaha2(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
             let first_char = lujvo.chars().next().ok_or_else(|| LujvoError {
                 message: "Unexpected end of input".to_string(),
             })?;
-            
+
             let second_char = lujvo.chars().nth(1);
-            
+
             if first_char == 'y'
                 || (first_char == 'n' && second_char == Some('r'))
                 || (first_char == 'r' && second_char.is_some_and(|c| get_cv_info(&c.to_string()) == "C"))
@@ -190,12 +192,12 @@ mod tests {
 
     #[test]
     fn test_jvokaha2_valid() {
-        let result = jvokaha2("bramlatu").unwrap();
+        let result = decompose_into_rafsi("bramlatu").unwrap();
         assert_eq!(result, vec!["bra", "mlatu"]);
     }
 
     #[test]
     fn test_jvokaha2_invalid() {
-        assert!(jvokaha2("invalid").is_err());
+        assert!(decompose_into_rafsi("invalid").is_err());
     }
 }

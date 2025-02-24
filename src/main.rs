@@ -1,5 +1,5 @@
 use clap::{Arg, Command};
-use jvozba::{jvokaha, tools::search_selrafsi_from_rafsi2, jvozba};
+use jvozba::{jvokaha, jvozba, tools::{search_selrafsi_from_rafsi2, RafsiOptions}};
 use rayon::prelude::*;
 use std::{
     collections::HashSet,
@@ -102,7 +102,13 @@ fn main() -> anyhow::Result<()> {
 
         let forbid_la_lai_doi = matches.get_flag("forbid_la_lai_doi");
         let exp_rafsi = matches.get_flag("exp_rafsi");
-        let results = jvozba(&words, forbid_la_lai_doi, exp_rafsi, false);
+        let results = jvozba(&words, forbid_la_lai_doi, false, &RafsiOptions {
+            exp_rafsi,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        });
         for result in results {
             log(&format!("{}: {}", result.lujvo, result.score));
         }
@@ -117,7 +123,13 @@ fn main() -> anyhow::Result<()> {
         let exp_rafsi = matches.get_flag("exp_rafsi");
 
         let forbid_cmevla = matches.get_flag("forbid_cmevla");
-        match jvozba::tools::reconstruct_lujvo(lujvo, exp_rafsi, forbid_cmevla) {
+        match jvozba::tools::reconstruct_lujvo(lujvo, forbid_cmevla, &RafsiOptions {
+            exp_rafsi,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        }) {
             Ok(reconstructed) => {
                 log(&format!("Reconstructed lujvo: {}", reconstructed));
             }
@@ -143,7 +155,13 @@ fn main() -> anyhow::Result<()> {
                     .into_iter()
                     .filter(|a| a.len() > 1)
                     .map(|rafsi| {
-                        match search_selrafsi_from_rafsi2(&rafsi, exp_rafsi) {
+                        match search_selrafsi_from_rafsi2(&rafsi, &RafsiOptions {
+                            exp_rafsi,
+                            custom_cmavo: None,
+                            custom_cmavo_exp: None,
+                            custom_gismu: None,
+                            custom_gismu_exp: None,
+                        }) {
                             Some(selrafsi) => selrafsi,
                             None => format!("-{}-", rafsi), // output as rafsi form; signify as unknown
                         }
