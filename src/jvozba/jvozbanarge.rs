@@ -47,7 +47,7 @@ pub struct LujvoAndScore {
 ///
 /// # Returns
 /// Vector of LujvoAndScore structs sorted by best score first
-pub fn jvozba(arr: &[String], forbid_la_lai_doi: bool, exp_rafsi: bool) -> Vec<LujvoAndScore> {
+pub fn jvozba(arr: &[String], forbid_la_lai_doi: bool, exp_rafsi: bool, forbid_cmevla: bool) -> Vec<LujvoAndScore> {
     let candid_arr: Vec<Vec<String>> = arr
         .iter()
         .enumerate()
@@ -62,7 +62,7 @@ pub fn jvozba(arr: &[String], forbid_la_lai_doi: bool, exp_rafsi: bool) -> Vec<L
                 score: get_lujvo_score(&result),
             })
         })
-        .filter(|d| !is_forbidden(d, forbid_la_lai_doi))
+        .filter(|d| !is_forbidden(d, forbid_la_lai_doi) && !(forbid_cmevla && is_cmevla(&d.lujvo)))
         .collect();
 
     answers.sort_unstable_by_key(|a| a.score);
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn test_jvozba_klama_gasnu() {
         let input = vec!["klama".to_string(), "gasnu".to_string()];
-        let result = jvozba(&input, false, false);
+        let result = jvozba(&input, false, false, true);
 
         assert!(!result.is_empty(), "jvozba should return at least one result");
         assert_eq!(result[0].lujvo, "klagau", "First result should be 'klagau'");
@@ -219,21 +219,21 @@ mod tests {
     #[test]
     fn test_jvozba_single_word() {
         let input = vec!["klama".to_string()];
-        let result = jvozba(&input, false, false);
+        let result = jvozba(&input, false, false, true);
         assert!(result.is_empty(), "Single word should return empty result");
     }
 
     #[test]
     fn test_jvozba_empty_input() {
         let input: Vec<String> = vec![];
-        let result = jvozba(&input, false, false);
+        let result = jvozba(&input, false, false, true);
         assert!(result.is_empty(), "Empty input should return empty result");
     }
 
     #[test]
     fn test_jvozba_experimental_rafsi() {
         let input = vec!["klama".to_string(), "gasnu".to_string()];
-        let result = jvozba(&input, false, true);
+        let result = jvozba(&input, false, true, true);
         assert!(!result.is_empty(), "Should include experimental rafsi");
     }
 

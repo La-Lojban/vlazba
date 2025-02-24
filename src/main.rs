@@ -78,6 +78,20 @@ fn main() -> anyhow::Result<()> {
                 .num_args(0)
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("reconstruct")
+                .long("reconstruct")
+                .help("Reconstruct a lujvo from its components")
+                .num_args(0)
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("forbid_cmevla")
+                .long("forbid-cmevla")
+                .help("Forbid cmevla (name words) in lujvo reconstruction")
+                .num_args(0)
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     if matches.get_flag("jvozba") {
@@ -88,9 +102,28 @@ fn main() -> anyhow::Result<()> {
 
         let forbid_la_lai_doi = matches.get_flag("forbid_la_lai_doi");
         let exp_rafsi = matches.get_flag("exp_rafsi");
-        let results = jvozba(&words, forbid_la_lai_doi, exp_rafsi);
+        let results = jvozba(&words, forbid_la_lai_doi, exp_rafsi, false);
         for result in results {
             log(&format!("{}: {}", result.lujvo, result.score));
+        }
+        return Ok(());
+    }
+
+    if matches.get_flag("reconstruct") {
+        let lujvo: &str = matches
+            .get_one::<String>("words")
+            .map(String::as_str)
+            .unwrap_or("");
+        let exp_rafsi = matches.get_flag("exp_rafsi");
+
+        let forbid_cmevla = matches.get_flag("forbid_cmevla");
+        match jvozba::tools::reconstruct_lujvo(lujvo, exp_rafsi, forbid_cmevla) {
+            Ok(reconstructed) => {
+                log(&format!("Reconstructed lujvo: {}", reconstructed));
+            }
+            Err(e) => {
+                log(&format!("Error reconstructing lujvo: {}", e));
+            }
         }
         return Ok(());
     }

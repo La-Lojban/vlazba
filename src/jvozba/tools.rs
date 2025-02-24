@@ -1,5 +1,6 @@
 use serde_json;
 
+use super::{jvokaha, jvozbanarge};
 use super::rafsi_list::{
     get_cmavo_rafsi_list, get_cmavo_rafsi_list_exp, get_gismu_rafsi_list, get_gismu_rafsi_list_exp,
 };
@@ -78,6 +79,81 @@ pub fn get_candid(selrafsi: &str, is_last: bool, exp_rafsi: bool) -> Vec<String>
         candid
     } else {
         Vec::new()
+    }
+}
+
+/// Reconstruct a lujvo from its components
+/// 
+/// # Arguments
+/// * `lujvo` - The lujvo to reconstruct
+/// * `exp_rafsi` - Whether to use experimental rafsi
+/// 
+/// # Returns
+/// Result with reconstructed lujvo or error message
+pub fn reconstruct_lujvo(lujvo: &str, exp_rafsi: bool, forbid_cmevla: bool) -> Result<String, Box<dyn std::error::Error>> {
+    // Split into rafsi
+    let rafsi_list = jvokaha::jvokaha(lujvo)?;
+    
+    // Get selrafsi for each rafsi
+    let selrafsi_list: Vec<String> = rafsi_list
+        .iter()
+        .filter_map(|rafsi| {
+            if rafsi == "y" || rafsi == "r" || rafsi == "n" {
+                None
+            } else {
+                search_selrafsi_from_rafsi2(rafsi, exp_rafsi)
+            }
+        })
+        .collect();
+    
+    // Rebuild using jvozba
+    let rebuilt = jvozbanarge::jvozba(&selrafsi_list, false, exp_rafsi, forbid_cmevla)
+        .first()
+        .ok_or("Failed to rebuild lujvo")?
+        .lujvo
+        .clone();
+    
+    Ok(rebuilt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reconstruct_lujvo_basic() {
+        let result = reconstruct_lujvo("bramlatu", false, true).unwrap();
+        assert_eq!(result, "bramlatu");
+        let result = reconstruct_lujvo("bardymlatu", false, true).unwrap();
+        assert_eq!(result, "bramlatu");
+    }
+
+    #[test]
+    fn test_reconstruct_lujvo_with_y_hyphen() {
+        let result = reconstruct_lujvo("klamyseltru", false, true).unwrap();
+        assert_eq!(result, "klaseltru");
+    }
+
+    #[test]
+    fn test_reconstruct_lujvo_with_r_hyphen() {
+        let result = reconstruct_lujvo("toirbroda", false, true).unwrap();
+        assert_eq!(result, "toirbroda");
+    }
+
+    #[test]
+    fn test_reconstruct_lujvo_with_apostrophe() {
+        let result = reconstruct_lujvo("ca'irgau", false, true).unwrap();
+        assert_eq!(result, "ca'irgau");
+    }
+
+    #[test]
+    fn test_reconstruct_invalid_lujvo() {
+        assert!(reconstruct_lujvo("invalid", false, false).is_err());
+    }
+
+    #[test]
+    fn test_reconstruct_empty_string() {
+        assert!(reconstruct_lujvo("", false, false).is_err());
     }
 }
 

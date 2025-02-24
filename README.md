@@ -103,6 +103,27 @@ Examples:
 ./target/release/vlazba --jvozba --exp-rafsi "corci klama gasnu"
 ```
 
+### Lujvo Reconstruction
+
+To reconstruct a lujvo from its components:
+
+```bash
+./target/release/vlazba --reconstruct "<lujvo>"
+```
+
+Options:
+- `--exp-rafsi`: Include experimental rafsi in reconstruction
+- `--forbid-cmevla`: Forbid cmevla (name words) in reconstruction
+
+Examples:
+
+```bash
+./target/release/vlazba --reconstruct "bramlatu"
+./target/release/vlazba --reconstruct "bardymlatu" --exp-rafsi
+./target/release/vlazba --reconstruct "toirbroda"
+./target/release/vlazba --reconstruct "toirbroda" --forbid-cmevla
+```
+
 ### Lujvo Decomposition (jvokaha)
 
 To split lujvo using the jvokaha algorithm:

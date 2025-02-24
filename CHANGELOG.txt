@@ -1,3 +1,9 @@
+Version 0.7.12
+
+Add lujvo reconstruction functionality
+
+----
+
 Version 0.7.6
 
 Fix documentation examples and jvozba integration
@@ -21,6 +27,7 @@ Version 0.7.0
 Added alpha port of [la jvozba](https://github.com/sozysozbot/sozysozbot_jvozba/tree/master)
 
 ----
+
 Version 0.6.1
 
 Improved performance.

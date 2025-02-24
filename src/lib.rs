@@ -6,7 +6,7 @@ A Rust implementation of Lojban lujvo (compound word) generation and analysis.
 ```rust
 use vlazba::jvozba::{jvozba, LujvoAndScore};
 
-let result = jvozba(&["klama".to_string(), "gasnu".to_string()], false, false);
+let result = jvozba(&["klama".to_string(), "gasnu".to_string()], false, false, false);
 assert!(result.iter().any(|r| r.lujvo == "klagau"));
 ```
 
@@ -26,5 +26,5 @@ pub use jvozba::{
     jvokaha,
     jvozba,
     scoring::get_lujvo_score,
-    tools::{get_candid, search_selrafsi_from_rafsi2},
+    tools::{get_candid, search_selrafsi_from_rafsi2, reconstruct_lujvo},
 };

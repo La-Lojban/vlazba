@@ -5,7 +5,8 @@ fn main() {
     let results = jvozba::jvozba(
         &["klama".to_string(), "gasnu".to_string()], 
         false, 
-        false
+        false,
+        true
     );
     
     println!("Top lujvo candidate: {}", results[0].lujvo);
