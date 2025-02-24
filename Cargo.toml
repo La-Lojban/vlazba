@@ -1,6 +1,6 @@
 [package]
 name = "vlazba"
-version = "0.7.9"
+version = "0.7.10"
 edition = "2021"
 authors = ["lagleki <gleki.is.my.name@gmail.com>"]
 description = "Lojban words generator and analyzer"
@@ -33,3 +33,10 @@ smallvec = "1.14.0"
 [profile.release]
 panic = "abort"
 debug = false
+lto = "thin"
+codegen-units = 1
+opt-level = 3
+overflow-checks = false
+incremental = false
+inline-threshold = 100
+inline-threshold-for-size = 25

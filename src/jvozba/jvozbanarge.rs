@@ -131,10 +131,10 @@ fn is_tosmabru(rafsi: &str, rest: &[String]) -> bool {
         return false;
     }
 
-    let index = rest
-        .iter()
-        .position(|s| !is_cvc(s))
-        .unwrap_or_else(|| panic!("Cannot happen"));
+    let index = match rest.iter().position(|s| !is_cvc(s)) {
+        Some(i) => i,
+        None => return false,
+    };
 
     if index < rest.len() {
         let s = &rest[index];
@@ -193,12 +193,12 @@ fn is_c(c: char) -> bool {
 fn get_cv_info(v: &str) -> String {
     v.chars()
         .map(|c| match c {
-            'a' | 'e' | 'i' | 'o' | 'u' => 'V',
+            'a' | 'e' | 'i' | 'o' | 'u' => "V",
             'b' | 'c' | 'd' | 'f' | 'g' | 'j' | 'k' | 'l' | 'm' | 'n' | 'p' | 'r' | 's' | 't'
-            | 'v' | 'x' | 'z' => 'C',
-            '\'' => '\'',
-            'y' => 'Y',
-            _ => panic!("Unexpected character: {}", c),
+            | 'v' | 'x' | 'z' => "C",
+            '\'' => "'",
+            'y' => "Y",
+            _ => "", // Skip unexpected characters
         })
         .collect()
 }
@@ -217,5 +217,13 @@ mod tests {
             "jvozba should return at least one result"
         );
         assert_eq!(result[0].lujvo, "klagau", "First result should be 'klagau'");
+    }
+
+    #[test]
+    fn test_is_tosmabru() {
+        // Test a valid tosmabru case
+        let rafsi = "tos";
+        let rest = vec!["mabru".to_string()];
+        assert!(is_tosmabru(rafsi, &rest), "'tosmabru' should be a valid tosmabru");
     }
 }

@@ -77,7 +77,7 @@ pub fn get_candid(selrafsi: &str, is_last: bool, exp_rafsi: bool) -> Vec<String>
         }
         candid
     } else {
-        panic!("no rafsi for word {}", selrafsi);
+        Vec::new()
     }
 }
 

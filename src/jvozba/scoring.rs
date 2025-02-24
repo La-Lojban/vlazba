@@ -32,7 +32,7 @@ pub fn get_cv_info(v: &str) -> String {
             'b' | 'c' | 'd' | 'f' | 'g' | 'j' | 'k' | 'l' | 'm' | 'n' | 'p' | 'r' | 's' | 't' | 'v' | 'x' | 'z' => "C",
             '\'' => "'",
             'y' => "Y",
-            _ => panic!("Unexpected character: {}", c),
+            _ => "", // Skip unexpected characters
         })
         .collect()
 }
