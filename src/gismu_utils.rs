@@ -259,6 +259,16 @@ impl<'a> GismuMatcher<'a> {
             .cloned()
     }
 
+    /// Find all gismu similar to the candidate word
+    pub fn gimka(&self, candidate: &str) -> Vec<String> {
+        let candidate = candidate.trim_end();
+        self.gismus
+            .iter()
+            .filter(|word| self.match_gismu(word, candidate))
+            .cloned()
+            .collect()
+    }
+
     fn match_gismu(&self, gismu: &str, candidate: &str) -> bool {
         self.match_stem(gismu, candidate) || self.match_structure(gismu, candidate)
     }

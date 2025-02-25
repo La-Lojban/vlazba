@@ -34,3 +34,4 @@ pub use jvozba::{
     scoring::get_lujvo_score,
     tools::{get_candid, search_selrafsi_from_rafsi2, reconstruct_lujvo},
 };
+pub use gismu_utils::{GismuGenerator, GismuMatcher, GismuScorer};

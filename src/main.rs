@@ -92,6 +92,13 @@ fn main() -> anyhow::Result<()> {
                 .num_args(0)
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("gimka") 
+                .long("gimka")
+                .help("Find similar existing gismu using gimka function")
+                .num_args(0)
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     if matches.get_flag("jvozba") {
@@ -136,6 +143,29 @@ fn main() -> anyhow::Result<()> {
             Err(e) => {
                 log(&format!("Error reconstructing lujvo: {}", e));
             }
+        }
+        return Ok(());
+    }
+
+    if matches.get_flag("gimka") {
+        let candidate: &str = matches
+            .get_one::<String>("words")
+            .map(String::as_str)
+            .unwrap_or("");
+        let gismu_list_path = matches.get_one::<String>("deduplicate").map(String::as_str).unwrap_or("src/gismu-list.txt");
+        
+        log(&format!("Looking for gismu similar to '{}' using list: {}", candidate, gismu_list_path));
+        let gismus = read_gismu_list(gismu_list_path)?;
+        let matcher = Arc::new(GismuMatcher::new(&gismus, None));
+        let similar = matcher.gimka(candidate);
+
+        if !similar.is_empty() {
+            log("Similar gismu found:");
+            for gismu in similar {
+                log(&format!("- {}", gismu));
+            }
+        } else {
+            log("No similar gismu found");
         }
         return Ok(());
     }
