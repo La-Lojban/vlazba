@@ -200,4 +200,15 @@ mod tests {
     fn test_jvokaha2_invalid() {
         assert!(decompose_into_rafsi("invalid").is_err());
     }
+
+    /// Regression: CVC rafsi (zuk) + y-hyphen + CV'V rafsi (de'a) must be accepted
+    /// as valid and decompose to ["zuk", "y", "de'a"], not rejected due to a
+    /// spurious second y produced by the tosmabru check.
+    #[test]
+    fn test_jvokaha_cvc_y_cvv() {
+        assert_eq!(
+            jvokaha("zukyde'a").unwrap(),
+            vec!["zuk", "y", "de'a"]
+        );
+    }
 }

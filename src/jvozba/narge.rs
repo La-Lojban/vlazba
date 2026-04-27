@@ -105,7 +105,7 @@ pub fn normalize(rafsi_list: &[String]) -> Result<Vec<String>, Box<dyn std::erro
         let end = rafsi.chars().last().unwrap();
         let init = result[0].chars().next().unwrap();
 
-        if is_4letter(rafsi)
+        let y_inserted = if is_4letter(rafsi)
             || (is_c(end) && is_c(init) && is_permissible(end, init) == 0)
             || (end == 'n'
                 && ["ts", "tc", "dz", "dj"]
@@ -113,7 +113,10 @@ pub fn normalize(rafsi_list: &[String]) -> Result<Vec<String>, Box<dyn std::erro
                     .any(|&s| result[0].starts_with(s)))
         {
             result.insert(0, "y".to_string());
-        }
+            true
+        } else {
+            false
+        };
 
         // Handle CVV case for first rafsi separately
         if i == rafsi_list.len() - 2 && is_cvv(rafsi) {
@@ -121,7 +124,7 @@ pub fn normalize(rafsi_list: &[String]) -> Result<Vec<String>, Box<dyn std::erro
             if rafsi_list.len() > 2 || !is_ccv(&result[0]) {
                 result.insert(0, hyphen.to_string());
             }
-        } else if i == rafsi_list.len() - 2 && is_cvc(rafsi) && is_tosmabru(rafsi, &result) {
+        } else if !y_inserted && i == rafsi_list.len() - 2 && is_cvc(rafsi) && is_tosmabru(rafsi, &result) {
             result.insert(0, "y".to_string());
         }
 
@@ -335,5 +338,15 @@ mod tests {
     fn test_is_cmevla() {
         assert!(is_cmevla("klaman"), "Should recognize cmevla");
         assert!(!is_cmevla("klama"), "Should recognize non-cmevla");
+    }
+
+    /// Regression: CVC rafsi + CV'V rafsi with an impermissible consonant pair must
+    /// produce exactly one y-hyphen, not two. The tosmabru check must not re-fire
+    /// when y was already inserted for the impermissible pair.
+    #[test]
+    fn test_normalize_cvc_cvv_single_y() {
+        let input = vec!["zuk".to_string(), "de'a".to_string()];
+        let result = normalize(&input).unwrap();
+        assert_eq!(result, vec!["zuk", "y", "de'a"]);
     }
 }
