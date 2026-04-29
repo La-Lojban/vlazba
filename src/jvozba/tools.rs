@@ -274,6 +274,64 @@ mod tests {
         };
         assert!(reconstruct_lujvo("", false, &options).is_err());
     }
+
+    /// Regression: search_selrafsi_from_rafsi2 must look up the actual gismu
+    /// key, not just the first vowel that "exists". Previously it returned
+    /// "zukta" (not a gismu) for "zukt" because gismu_rafsi_list always
+    /// returns Some(empty_vec) for any string.
+    #[test]
+    fn test_search_selrafsi_cvcc_picks_real_gismu() {
+        let options = RafsiOptions {
+            exp_rafsi: false,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            search_selrafsi_from_rafsi2("zukt", &options),
+            Some("zukte".to_string())
+        );
+    }
+
+    /// When custom_gismu is provided it must fully replace the bundled JSON
+    /// for the reverse rafsi->selrafsi lookup.
+    #[test]
+    fn test_search_selrafsi_uses_custom_gismu_for_reverse_lookup() {
+        let mut custom_gismu: HashMap<String, Vec<String>> = HashMap::new();
+        custom_gismu.insert("klum".into(), vec!["klu".into()]);
+        let options = RafsiOptions {
+            exp_rafsi: false,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: Some(&custom_gismu),
+            custom_gismu_exp: None,
+        };
+        // "klm" only exists in the custom map -> must resolve to "klamb"
+        assert_eq!(
+            search_selrafsi_from_rafsi2("klu", &options),
+            Some("klum".to_string())
+        );
+        // Bundled-only rafsi must NOT be found when a custom map is supplied
+        assert_eq!(search_selrafsi_from_rafsi2("zuk", &options), None);
+    }
+
+    /// Regression: reconstructing "zuktyde'a" (CVCC rafsi of zukte + y + de'a)
+    /// with forbid_cmevla=true must propose the better "zukyde'a" variant.
+    #[test]
+    fn test_reconstruct_zuktydea_to_zukydea() {
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            reconstruct_lujvo("zuktyde'a", true, &options).unwrap(),
+            "zukyde'a"
+        );
+    }
 }
 
 pub fn search_selrafsi_from_rafsi2(
@@ -289,35 +347,54 @@ pub fn search_selrafsi_from_rafsi2(
     if rafsi != "brod" && rafsi.len() == 4 && !rafsi.contains('\'') {
         for vowel in "aeiou".chars() {
             let gismu_candid = format!("{}{}", rafsi, vowel);
-            if gismu_rafsi_list(&gismu_candid, options.exp_rafsi, None, None).is_some() {
+            let exists = match options.custom_gismu {
+                Some(m) => m.contains_key(&gismu_candid),
+                None => get_gismu_rafsi_list().contains_key(&gismu_candid),
+            } || (options.exp_rafsi
+                && match options.custom_gismu_exp {
+                    Some(m) => m.contains_key(&gismu_candid),
+                    None => get_gismu_rafsi_list_exp().contains_key(&gismu_candid),
+                });
+            if exists {
                 return Some(gismu_candid);
             }
         }
     }
 
-    for (i, rafsi_list) in get_gismu_rafsi_list().iter() {
-        if rafsi_list.contains(&rafsi.to_string()) {
-            return Some(i.clone());
-        }
+    let needle = rafsi.to_string();
+    let find_in = |map: &HashMap<String, Vec<String>>| -> Option<String> {
+        map.iter()
+            .find(|(_, list)| list.contains(&needle))
+            .map(|(k, _)| k.clone())
+    };
+
+    if let Some(found) = match options.custom_gismu {
+        Some(m) => find_in(m),
+        None => find_in(get_gismu_rafsi_list()),
+    } {
+        return Some(found);
     }
 
-    for (j, rafsi_list) in get_cmavo_rafsi_list().iter() {
-        if rafsi_list.contains(&rafsi.to_string()) {
-            return Some(j.clone());
-        }
+    if let Some(found) = match options.custom_cmavo {
+        Some(m) => find_in(m),
+        None => find_in(get_cmavo_rafsi_list()),
+    } {
+        return Some(found);
     }
 
     if options.exp_rafsi {
-        for (i, rafsi_list) in get_gismu_rafsi_list_exp().iter() {
-            if rafsi_list.contains(&rafsi.to_string()) {
-                return Some(i.clone());
-            }
+        if let Some(found) = match options.custom_gismu_exp {
+            Some(m) => find_in(m),
+            None => find_in(get_gismu_rafsi_list_exp()),
+        } {
+            return Some(found);
         }
 
-        for (j, rafsi_list) in get_cmavo_rafsi_list_exp().iter() {
-            if rafsi_list.contains(&rafsi.to_string()) {
-                return Some(j.clone());
-            }
+        if let Some(found) = match options.custom_cmavo_exp {
+            Some(m) => find_in(m),
+            None => find_in(get_cmavo_rafsi_list_exp()),
+        } {
+            return Some(found);
         }
     }
 
