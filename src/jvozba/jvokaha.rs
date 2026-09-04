@@ -24,6 +24,10 @@ impl Error for LujvoError {}
 ///
 /// # Returns
 /// Result with vector of rafsi or error message
+///
+/// Forms that differ from the score-normalized spelling only by optional
+/// hyphens (e.g. `rivyzu'e` vs canonical `rivzu'e`) are accepted: the
+/// canonical form is re-decomposed and returned.
 pub fn jvokaha(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let arr = decompose_into_rafsi(lujvo)?;
     let rafsi_list: Vec<String> = arr.iter().filter(|a| a.len() != 1).cloned().collect();
@@ -32,12 +36,9 @@ pub fn jvokaha(lujvo: &str) -> Result<Vec<String>, Box<dyn Error>> {
     if lujvo == correct_lujvo {
         Ok(arr)
     } else {
-        Err(Box::new(LujvoError {
-            message: format!(
-                "malformed lujvo {{{}}}; it should be {{{}}}",
-                lujvo, correct_lujvo
-            ),
-        }))
+        // Non-canonical hyphenation still yields the same rafsi; return the
+        // decomposition of the normalized spelling rather than erroring.
+        decompose_into_rafsi(&correct_lujvo)
     }
 }
 
@@ -210,5 +211,13 @@ mod tests {
             jvokaha("zukyde'a").unwrap(),
             vec!["zuk", "y", "de'a"]
         );
+    }
+
+    /// Extra y-hyphen is optional when the cluster is already permissible
+    /// (`vz`). Decompose via the canonical spelling `rivzu'e`.
+    #[test]
+    fn test_jvokaha_optional_extra_y() {
+        assert_eq!(jvokaha("rivzu'e").unwrap(), vec!["riv", "zu'e"]);
+        assert_eq!(jvokaha("rivyzu'e").unwrap(), vec!["riv", "zu'e"]);
     }
 }

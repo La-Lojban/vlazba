@@ -1,3 +1,10 @@
+Version 0.8.1
+
+jvokaha: accept non-canonical optional hyphens (e.g. rivyzu'e → riv + zu'e
+via canonical rivzu'e) instead of rejecting as malformed.
+
+----
+
 Version 0.7.12
 
 Add lujvo reconstruction functionality
