@@ -1,20 +1,21 @@
 use clap::{Arg, Command};
-use jvozba::{jvokaha, jvozba, tools::{search_selrafsi_from_rafsi2, RafsiOptions}};
 use rayon::prelude::*;
+use smallvec::SmallVec;
 use std::{
     collections::HashSet,
     fs::File,
     io::{self, BufRead, BufReader},
     sync::Arc,
 };
-use smallvec::SmallVec;
-
-mod libs;
-use libs::{cli::{generate_weights, validate_words}, config::{C, DEFAULT_WEIGHTS_STR, V, VERSION}};
-
-mod gismu_utils;
-use gismu_utils::{GismuGenerator, GismuMatcher, GismuScorer};
-mod jvozba;
+use vlazba::gismu_utils::{GismuGenerator, GismuMatcher, GismuScorer};
+use vlazba::jvozba::{
+    jvokaha, jvozba,
+    tools::{reconstruct_lujvo, search_selrafsi_from_rafsi2, RafsiOptions},
+};
+use vlazba::libs::{
+    cli::{generate_weights, validate_words},
+    config::{C, DEFAULT_WEIGHTS_STR, V, VERSION},
+};
 
 fn log(msg: &str) {
     eprintln!("{}", msg);
@@ -130,7 +131,7 @@ fn main() -> anyhow::Result<()> {
         let exp_rafsi = matches.get_flag("exp_rafsi");
 
         let forbid_cmevla = matches.get_flag("forbid_cmevla");
-        match jvozba::tools::reconstruct_lujvo(lujvo, forbid_cmevla, &RafsiOptions {
+        match reconstruct_lujvo(lujvo, forbid_cmevla, &RafsiOptions {
             exp_rafsi,
             custom_cmavo: None,
             custom_cmavo_exp: None,
