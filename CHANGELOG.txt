@@ -1,3 +1,10 @@
+Version 0.8.2
+
+- reconstruct_lujvo: retry with built-in rafsi lists when custom maps fail
+- analyze_lujvo_spelling: compare input to score-optimal form (canonical + is_score_optimal)
+
+----
+
 Version 0.8.1
 
 jvokaha: accept non-canonical optional hyphens (e.g. rivyzu'e → riv + zu'e

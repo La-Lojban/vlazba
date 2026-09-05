@@ -32,6 +32,9 @@ pub use jvozba::{
     jvokaha,
     jvozba,
     scoring::get_lujvo_score,
-    tools::{get_candid, search_selrafsi_from_rafsi2, reconstruct_lujvo},
+    tools::{
+        analyze_lujvo_spelling, get_candid, reconstruct_lujvo, search_selrafsi_from_rafsi2,
+        LujvoSpellingAnalysis,
+    },
 };
 pub use gismu_utils::{GismuGenerator, GismuMatcher, GismuScorer};

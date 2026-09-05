@@ -144,46 +144,92 @@ pub fn get_candid(selrafsi: &str, is_last: bool, options: &RafsiOptions) -> Vec<
 ///
 /// # Arguments
 /// * `lujvo` - The lujvo to reconstruct
-/// * `exp_rafsi` - Whether to use experimental rafsi
+/// * `forbid_cmevla` - Whether to forbid cmevla in the rebuild
+/// * `options` - Rafsi lookup options (custom maps and experimental rafsi)
 ///
 /// # Returns
 /// Result with reconstructed lujvo or error message
+///
+/// When custom rafsi maps are incomplete, vlazba does not fall through to its
+/// built-in lists (custom `Some` shadows them). This function retries once with
+/// built-in lists only so score-optimal reconstruction still works.
 pub fn reconstruct_lujvo(
     lujvo: &str,
     forbid_cmevla: bool,
     options: &RafsiOptions,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Split into rafsi
+    match reconstruct_lujvo_with(lujvo, forbid_cmevla, options) {
+        Ok(s) => Ok(s),
+        Err(e) => {
+            let has_custom = options.custom_cmavo.is_some()
+                || options.custom_cmavo_exp.is_some()
+                || options.custom_gismu.is_some()
+                || options.custom_gismu_exp.is_some();
+            if !has_custom {
+                return Err(e);
+            }
+            let builtin = RafsiOptions {
+                exp_rafsi: options.exp_rafsi,
+                custom_cmavo: None,
+                custom_cmavo_exp: None,
+                custom_gismu: None,
+                custom_gismu_exp: None,
+            };
+            reconstruct_lujvo_with(lujvo, forbid_cmevla, &builtin)
+        }
+    }
+}
+
+fn reconstruct_lujvo_with(
+    lujvo: &str,
+    forbid_cmevla: bool,
+    options: &RafsiOptions,
+) -> Result<String, Box<dyn std::error::Error>> {
     let rafsi_list = jvokaha::jvokaha(lujvo)?;
 
-    // Get selrafsi for each rafsi
     let selrafsi_list: Vec<String> = rafsi_list
         .iter()
         .filter_map(|rafsi| {
             if rafsi == "y" || rafsi == "r" || rafsi == "n" {
                 None
             } else {
-                search_selrafsi_from_rafsi2(
-                    rafsi,
-                    options,
-                )
+                search_selrafsi_from_rafsi2(rafsi, options)
             }
         })
         .collect();
 
-    // Rebuild using jvozba
-    let rebuilt = narge::jvozba(
-        &selrafsi_list,
-        false,
-        forbid_cmevla,
-        options,
-    )
-    .first()
-    .ok_or("Failed to rebuild lujvo")?
-    .lujvo
-    .clone();
+    let rebuilt = narge::jvozba(&selrafsi_list, false, forbid_cmevla, options)
+        .first()
+        .ok_or("Failed to rebuild lujvo")?
+        .lujvo
+        .clone();
 
     Ok(rebuilt)
+}
+
+/// Score-optimal spelling analysis for a classical lujvo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LujvoSpellingAnalysis {
+    /// Best-scoring form from the same selrafsi (`reconstruct_lujvo`).
+    pub canonical: String,
+    /// True when `canonical` equals the input spelling.
+    pub is_score_optimal: bool,
+}
+
+/// Compare a lujvo spelling to its score-optimal form.
+///
+/// Returns `None` if the string is not a classical lujvo (`jvokaha` /
+/// `reconstruct_lujvo` fails even with built-in rafsi lists).
+pub fn analyze_lujvo_spelling(
+    word: &str,
+    options: &RafsiOptions,
+) -> Option<LujvoSpellingAnalysis> {
+    jvokaha::jvokaha(word).ok()?;
+    let canonical = reconstruct_lujvo(word, true, options).ok()?;
+    Some(LujvoSpellingAnalysis {
+        is_score_optimal: canonical == word,
+        canonical,
+    })
 }
 
 #[cfg(test)]
@@ -331,6 +377,54 @@ mod tests {
             reconstruct_lujvo("zuktyde'a", true, &options).unwrap(),
             "zukyde'a"
         );
+    }
+
+    #[test]
+    fn test_reconstruct_falls_back_to_builtins_with_incomplete_custom_maps() {
+        let mut custom_gismu: HashMap<String, Vec<String>> = HashMap::new();
+        custom_gismu.insert("broda".into(), vec!["rod".into(), "brod".into()]);
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: Some(&custom_gismu),
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            reconstruct_lujvo("rivyzu'e", true, &options).unwrap(),
+            "rivzu'e"
+        );
+    }
+
+    #[test]
+    fn test_analyze_lujvo_spelling_optional_extra_y() {
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let a = analyze_lujvo_spelling("rivyzu'e", &options).unwrap();
+        assert!(!a.is_score_optimal);
+        assert_eq!(a.canonical, "rivzu'e");
+        let b = analyze_lujvo_spelling("rivzu'e", &options).unwrap();
+        assert!(b.is_score_optimal);
+        assert_eq!(b.canonical, "rivzu'e");
+    }
+
+    #[test]
+    fn test_analyze_lujvo_spelling_score_suboptimal_rafsi() {
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let a = analyze_lujvo_spelling("bardymlatu", &options).unwrap();
+        assert!(!a.is_score_optimal);
+        assert_eq!(a.canonical, "bramlatu");
     }
 }
 
