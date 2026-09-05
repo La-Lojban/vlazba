@@ -1,3 +1,11 @@
+Version 0.8.5
+
+- Rafsi lookup: custom maps override per key; missing keys fall through to
+  builtins (fixes datn←datni when DB omits empty-rafsi gismu)
+- reconstruct still requires every rafsi to resolve (no silent drops)
+
+----
+
 Version 0.8.4
 
 - reconstruct_lujvo: error (and fall back to builtins) when any rafsi is

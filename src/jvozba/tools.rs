@@ -43,13 +43,13 @@ pub fn gismu_rafsi_list(
     custom_gismu: Option<&HashMap<String, Vec<String>>>,
     custom_gismu_exp: Option<&HashMap<String, Vec<String>>>,
 ) -> Option<Vec<String>> {
+    // Custom map overrides per key; missing keys fall through to builtins.
     if let Some(custom_gismu) = custom_gismu {
         if let Some(rafsi) = custom_gismu.get(a) {
-            if !rafsi.is_empty() {
-                return Some(rafsi.clone());
-            }
+            return Some(rafsi.clone());
         }
-    } else if let Some(rafsi) = get_gismu_rafsi_list().get(a) {
+    }
+    if let Some(rafsi) = get_gismu_rafsi_list().get(a) {
         if !rafsi.is_empty() {
             return Some(rafsi.clone());
         }
@@ -58,11 +58,10 @@ pub fn gismu_rafsi_list(
     if exp_rafsi {
         if let Some(custom_gismu_exp) = custom_gismu_exp {
             if let Some(rafsi) = custom_gismu_exp.get(a) {
-                if !rafsi.is_empty() {
-                    return Some(rafsi.clone());
-                }
+                return Some(rafsi.clone());
             }
-        } else if let Some(rafsi) = get_gismu_rafsi_list_exp().get(a) {
+        }
+        if let Some(rafsi) = get_gismu_rafsi_list_exp().get(a) {
             if !rafsi.is_empty() {
                 return Some(rafsi.clone());
             }
@@ -79,11 +78,10 @@ pub fn cmavo_rafsi_list(
 ) -> Option<Vec<String>> {
     if let Some(custom_cmavo) = custom_cmavo {
         if let Some(rafsi) = custom_cmavo.get(a) {
-            if !rafsi.is_empty() {
-                return Some(rafsi.clone());
-            }
+            return Some(rafsi.clone());
         }
-    } else if let Some(rafsi) = get_cmavo_rafsi_list().get(a) {
+    }
+    if let Some(rafsi) = get_cmavo_rafsi_list().get(a) {
         if !rafsi.is_empty() {
             return Some(rafsi.clone());
         }
@@ -92,11 +90,10 @@ pub fn cmavo_rafsi_list(
     if exp_rafsi {
         if let Some(custom_cmavo_exp) = custom_cmavo_exp {
             if let Some(rafsi) = custom_cmavo_exp.get(a) {
-                if !rafsi.is_empty() {
-                    return Some(rafsi.clone());
-                }
+                return Some(rafsi.clone());
             }
-        } else if let Some(rafsi) = get_cmavo_rafsi_list_exp().get(a) {
+        }
+        if let Some(rafsi) = get_cmavo_rafsi_list_exp().get(a) {
             if !rafsi.is_empty() {
                 return Some(rafsi.clone());
             }
@@ -150,9 +147,9 @@ pub fn get_candid(selrafsi: &str, is_last: bool, options: &RafsiOptions) -> Vec<
 /// # Returns
 /// Result with reconstructed lujvo or error message
 ///
-/// When custom rafsi maps are incomplete, vlazba does not fall through to its
-/// built-in lists (custom `Some` shadows them). This function retries once with
-/// built-in lists only so score-optimal reconstruction still works.
+/// When custom rafsi maps are incomplete, missing keys fall through to the
+/// built-in lists (per-key override, not wholesale replace). A full builtin
+/// retry is kept for other reconstruct failures.
 pub fn reconstruct_lujvo(
     lujvo: &str,
     forbid_cmevla: bool,
@@ -188,15 +185,15 @@ fn reconstruct_lujvo_with(
     let rafsi_list = jvokaha::jvokaha(lujvo)?;
 
     // Every non-hyphen piece must resolve. Silently dropping unknowns (via
-    // filter_map) used to rebuild a shorter lujvo as Ok — e.g. datnyveiste →
-    // veiste when custom maps omit datni — and skipped the builtin fallback.
+    // filter_map) used to rebuild a shorter lujvo as Ok (e.g. datnyveiste →
+    // veiste when `datn` failed reverse-lookup under incomplete custom maps).
     let mut selrafsi_list = Vec::new();
     for rafsi in &rafsi_list {
         if rafsi == "y" || rafsi == "r" || rafsi == "n" {
             continue;
         }
         let Some(selrafsi) = search_selrafsi_from_rafsi2(rafsi, options) else {
-            return Err(format!("Unknown rafsi `{rafsi}` in `{lujvo}`").into());
+            return Err(format!("Could not resolve rafsi `{rafsi}` in `{lujvo}`").into());
         };
         selrafsi_list.push(selrafsi);
     }
@@ -347,8 +344,7 @@ mod tests {
         );
     }
 
-    /// When custom_gismu is provided it must fully replace the bundled JSON
-    /// for the reverse rafsi->selrafsi lookup.
+    /// Custom keys override builtins; missing keys fall through.
     #[test]
     fn test_search_selrafsi_uses_custom_gismu_for_reverse_lookup() {
         let mut custom_gismu: HashMap<String, Vec<String>> = HashMap::new();
@@ -360,13 +356,35 @@ mod tests {
             custom_gismu: Some(&custom_gismu),
             custom_gismu_exp: None,
         };
-        // "klm" only exists in the custom map -> must resolve to "klamb"
         assert_eq!(
             search_selrafsi_from_rafsi2("klu", &options),
             Some("klum".to_string())
         );
-        // Bundled-only rafsi must NOT be found when a custom map is supplied
-        assert_eq!(search_selrafsi_from_rafsi2("zuk", &options), None);
+        // Not in custom map → builtin fallthrough (zuk ← zukte)
+        assert_eq!(
+            search_selrafsi_from_rafsi2("zuk", &options),
+            Some("zukte".to_string())
+        );
+    }
+
+    /// datni has no assigned short rafsi (empty list / DB NULL) but `datn` is
+    /// still the legal 4-letter form. Incomplete custom maps that omit datni
+    /// must still resolve via builtin keys (including empty-rafsi gismu).
+    #[test]
+    fn test_search_selrafsi_four_letter_falls_through_for_empty_rafsi_gismu() {
+        let mut custom_gismu: HashMap<String, Vec<String>> = HashMap::new();
+        custom_gismu.insert("vreji".into(), vec!["vei".into()]);
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: Some(&custom_gismu),
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            search_selrafsi_from_rafsi2("datn", &options),
+            Some("datni".to_string())
+        );
     }
 
     /// Regression: reconstructing "zuktyde'a" (CVCC rafsi of zukte + y + de'a)
@@ -464,7 +482,12 @@ pub fn search_selrafsi_from_rafsi2(
     rafsi: &str,
     options: &RafsiOptions,
 ) -> Option<String> {
-    if let Some(rafsis) = gismu_rafsi_list(rafsi, options.exp_rafsi, options.custom_gismu, options.custom_gismu_exp) {
+    if let Some(rafsis) = gismu_rafsi_list(
+        rafsi,
+        options.exp_rafsi,
+        options.custom_gismu,
+        options.custom_gismu_exp,
+    ) {
         if !rafsis.is_empty() {
             return Some(rafsi.to_owned());
         }
@@ -473,15 +496,7 @@ pub fn search_selrafsi_from_rafsi2(
     if rafsi != "brod" && rafsi.len() == 4 && !rafsi.contains('\'') {
         for vowel in "aeiou".chars() {
             let gismu_candid = format!("{}{}", rafsi, vowel);
-            let exists = match options.custom_gismu {
-                Some(m) => m.contains_key(&gismu_candid),
-                None => get_gismu_rafsi_list().contains_key(&gismu_candid),
-            } || (options.exp_rafsi
-                && match options.custom_gismu_exp {
-                    Some(m) => m.contains_key(&gismu_candid),
-                    None => get_gismu_rafsi_list_exp().contains_key(&gismu_candid),
-                });
-            if exists {
+            if gismu_key_exists(&gismu_candid, options) {
                 return Some(gismu_candid);
             }
         }
@@ -494,35 +509,66 @@ pub fn search_selrafsi_from_rafsi2(
             .map(|(k, _)| k.clone())
     };
 
-    if let Some(found) = match options.custom_gismu {
-        Some(m) => find_in(m),
-        None => find_in(get_gismu_rafsi_list()),
-    } {
+    // Prefer custom maps, then fall through to builtins for missing keys.
+    if let Some(m) = options.custom_gismu {
+        if let Some(found) = find_in(m) {
+            return Some(found);
+        }
+    }
+    if let Some(found) = find_in(get_gismu_rafsi_list()) {
         return Some(found);
     }
 
-    if let Some(found) = match options.custom_cmavo {
-        Some(m) => find_in(m),
-        None => find_in(get_cmavo_rafsi_list()),
-    } {
+    if let Some(m) = options.custom_cmavo {
+        if let Some(found) = find_in(m) {
+            return Some(found);
+        }
+    }
+    if let Some(found) = find_in(get_cmavo_rafsi_list()) {
         return Some(found);
     }
 
     if options.exp_rafsi {
-        if let Some(found) = match options.custom_gismu_exp {
-            Some(m) => find_in(m),
-            None => find_in(get_gismu_rafsi_list_exp()),
-        } {
+        if let Some(m) = options.custom_gismu_exp {
+            if let Some(found) = find_in(m) {
+                return Some(found);
+            }
+        }
+        if let Some(found) = find_in(get_gismu_rafsi_list_exp()) {
             return Some(found);
         }
 
-        if let Some(found) = match options.custom_cmavo_exp {
-            Some(m) => find_in(m),
-            None => find_in(get_cmavo_rafsi_list_exp()),
-        } {
+        if let Some(m) = options.custom_cmavo_exp {
+            if let Some(found) = find_in(m) {
+                return Some(found);
+            }
+        }
+        if let Some(found) = find_in(get_cmavo_rafsi_list_exp()) {
             return Some(found);
         }
     }
 
     None
+}
+
+fn gismu_key_exists(candid: &str, options: &RafsiOptions) -> bool {
+    if let Some(m) = options.custom_gismu {
+        if m.contains_key(candid) {
+            return true;
+        }
+    }
+    if get_gismu_rafsi_list().contains_key(candid) {
+        return true;
+    }
+    if options.exp_rafsi {
+        if let Some(m) = options.custom_gismu_exp {
+            if m.contains_key(candid) {
+                return true;
+            }
+        }
+        if get_gismu_rafsi_list_exp().contains_key(candid) {
+            return true;
+        }
+    }
+    false
 }
