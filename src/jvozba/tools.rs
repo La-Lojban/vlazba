@@ -187,16 +187,23 @@ fn reconstruct_lujvo_with(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let rafsi_list = jvokaha::jvokaha(lujvo)?;
 
-    let selrafsi_list: Vec<String> = rafsi_list
-        .iter()
-        .filter_map(|rafsi| {
-            if rafsi == "y" || rafsi == "r" || rafsi == "n" {
-                None
-            } else {
-                search_selrafsi_from_rafsi2(rafsi, options)
-            }
-        })
-        .collect();
+    // Every non-hyphen piece must resolve. Silently dropping unknowns (via
+    // filter_map) used to rebuild a shorter lujvo as Ok — e.g. datnyveiste →
+    // veiste when custom maps omit datni — and skipped the builtin fallback.
+    let mut selrafsi_list = Vec::new();
+    for rafsi in &rafsi_list {
+        if rafsi == "y" || rafsi == "r" || rafsi == "n" {
+            continue;
+        }
+        let Some(selrafsi) = search_selrafsi_from_rafsi2(rafsi, options) else {
+            return Err(format!("Unknown rafsi `{rafsi}` in `{lujvo}`").into());
+        };
+        selrafsi_list.push(selrafsi);
+    }
+
+    if selrafsi_list.len() < 2 {
+        return Err("Need at least two selrafsi to rebuild lujvo".into());
+    }
 
     let rebuilt = narge::jvozba(&selrafsi_list, false, forbid_cmevla, options)
         .first()
@@ -394,6 +401,31 @@ mod tests {
             reconstruct_lujvo("rivyzu'e", true, &options).unwrap(),
             "rivzu'e"
         );
+    }
+
+    /// Regression: dropping unresolved rafsi used to rebuild a shorter lujvo
+    /// (datnyveiste → veiste) as Ok, skipping the builtin fallback.
+    #[test]
+    fn test_reconstruct_does_not_drop_unresolved_rafsi() {
+        let mut custom_gismu: HashMap<String, Vec<String>> = HashMap::new();
+        custom_gismu.insert("vreji".into(), vec!["vei".into()]);
+        custom_gismu.insert("liste".into(), vec!["ste".into(), "list".into()]);
+        // omit datni — previously yielded Ok("veiste")
+        let empty_exp = HashMap::new();
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: Some(&custom_gismu),
+            custom_gismu_exp: Some(&empty_exp),
+        };
+        assert_eq!(
+            reconstruct_lujvo("datnyveiste", true, &options).unwrap(),
+            "datnyveiste"
+        );
+        let a = analyze_lujvo_spelling("datnyveiste", &options).unwrap();
+        assert!(a.is_score_optimal);
+        assert_eq!(a.canonical, "datnyveiste");
     }
 
     #[test]

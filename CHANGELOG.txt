@@ -1,3 +1,10 @@
+Version 0.8.4
+
+- reconstruct_lujvo: error (and fall back to builtins) when any rafsi is
+  unresolved instead of silently dropping components (datnyveiste → veiste)
+
+----
+
 Version 0.8.3
 
 - CLI binary links the library crate (fixes dead_code warnings for public API)
