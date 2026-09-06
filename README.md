@@ -41,7 +41,7 @@ Implements the gismu clash and jvozba algorithms described in [The Complete Lojb
 Add to your Cargo.toml:
 ```toml
 [dependencies]
-vlazba = "0.7"
+vlazba = "0.9"
 ```
 
 Basic usage:
@@ -51,7 +51,15 @@ use vlazba::jvozba::{jvozba, LujvoAndScore};
  let results = jvozba(
      &["klama".to_string(), "gasnu".to_string()],
      false,
-     false
+     false,
+     true, // best_only: DP search for score-optimal forms only
+     &vlazba::jvozba::tools::RafsiOptions {
+         exp_rafsi: false,
+         custom_cmavo: None,
+         custom_cmavo_exp: None,
+         custom_gismu: None,
+         custom_gismu_exp: None,
+     },
  );
  assert!(results.iter().any(|r| r.lujvo == "klagau"));
 
@@ -97,6 +105,10 @@ Examples:
 
 ```bash
 ./target/release/vlazba --jvozba "klama klama gasnu"
+```
+
+```bash
+./target/release/vlazba --jvozba --best-only "klama gasnu"
 ```
 
 ```bash
@@ -153,6 +165,7 @@ Examples:
 - `-a, --all-letters`: Use all available letters instead of only those in input words
 - `-d, --deduplicate`: Path to existing gismu list for deduplication
 - `--jvozba`: Use jvozba function to create lujvo instead of gismu generation
+- `--best-only`: With `--jvozba`, only compute score-optimal lujvo (proven DP; skips full enumeration)
 - `--forbid-la-lai-doi`: Forbid 'la', 'lai', 'doi' in lujvo when using jvozba
 - `--jvokaha`: Use jvokaha function to split lujvo into components
 - `--exp-rafsi`: Include experimental rafsi when generating lujvo

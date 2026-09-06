@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-pub const VERSION: &str = "v0.8.5";
+pub const VERSION: &str = "v0.9.0";
 
 pub static DEFAULT_WEIGHTS_STR: Lazy<String> = Lazy::new(|| {
     language_weights()

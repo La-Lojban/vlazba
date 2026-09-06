@@ -3,9 +3,10 @@ use vlazba::{jvozba, jvokaha};
 fn main() {
     // Generate lujvo candidates
     let results = jvozba::jvozba(
-        &["klama".to_string(), "gasnu".to_string()], 
-        false, 
+        &["klama".to_string(), "gasnu".to_string()],
         false,
+        false,
+        true, // best-score only (DP; no full Cartesian product)
         &jvozba::tools::RafsiOptions {
             exp_rafsi: true,
             custom_cmavo: None,

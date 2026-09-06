@@ -94,6 +94,13 @@ fn main() -> anyhow::Result<()> {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("best_only")
+                .long("best-only")
+                .help("With --jvozba: only compute score-optimal lujvo (DP; no full enumeration)")
+                .num_args(0)
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("gimka") 
                 .long("gimka")
                 .help("Find similar existing gismu using gimka function")
@@ -110,13 +117,20 @@ fn main() -> anyhow::Result<()> {
 
         let forbid_la_lai_doi = matches.get_flag("forbid_la_lai_doi");
         let exp_rafsi = matches.get_flag("exp_rafsi");
-        let results = jvozba(&words, forbid_la_lai_doi, false, &RafsiOptions {
-            exp_rafsi,
-            custom_cmavo: None,
-            custom_cmavo_exp: None,
-            custom_gismu: None,
-            custom_gismu_exp: None,
-        });
+        let best_only = matches.get_flag("best_only");
+        let results = jvozba(
+            &words,
+            forbid_la_lai_doi,
+            false,
+            best_only,
+            &RafsiOptions {
+                exp_rafsi,
+                custom_cmavo: None,
+                custom_cmavo_exp: None,
+                custom_gismu: None,
+                custom_gismu_exp: None,
+            },
+        );
         for result in results {
             log(&format!("{}: {}", result.lujvo, result.score));
         }

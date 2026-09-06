@@ -1,4 +1,7 @@
-use super::{scoring::get_lujvo_score, tools::{self, RafsiOptions}};
+use super::{
+    scoring::get_lujvo_score,
+    tools::{self, RafsiOptions},
+};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -43,7 +46,10 @@ pub struct LujvoAndScore {
 /// # Arguments
 /// * `arr` - List of selrafsi (Lojban root words)
 /// * `forbid_la_lai_doi` - Whether to forbid certain cmavo in lujvo
-/// * `exp_rafsi` - Whether to include experimental rafsi
+/// * `forbid_cmevla` - Whether to forbid consonant-final (cmevla) forms
+/// * `best_only` - If true, return only minimum-score forms via a DP search that
+///   never materializes the full Cartesian product (see [`jvozba_best_only`])
+/// * `options` - Rafsi lookup options
 ///
 /// # Returns
 /// Vector of LujvoAndScore structs sorted by best score first
@@ -51,8 +57,13 @@ pub fn jvozba(
     arr: &[String],
     forbid_la_lai_doi: bool,
     forbid_cmevla: bool,
+    best_only: bool,
     options: &RafsiOptions,
 ) -> Vec<LujvoAndScore> {
+    if best_only {
+        return jvozba_best_only(arr, forbid_la_lai_doi, forbid_cmevla, options);
+    }
+
     let candid_arr: Vec<Vec<String>> = arr
         .iter()
         .enumerate()
@@ -72,6 +83,182 @@ pub fn jvozba(
 
     answers.sort_unstable_by_key(|a| a.score);
     answers
+}
+
+/// Right-to-left DP for score-optimal lujvo only.
+///
+/// # Correctness sketch
+/// CLL score is additive over the normalized rafsi/hyphen sequence. Hyphens
+/// between rafsi `i` and `i+1` for `i > 0` depend only on those two rafsi.
+/// The first rafsi additionally needs the tosmabru / CVV-r rules, which read
+/// only: whether the final form is a cmevla, the head component, and the
+/// leading CVC-run through the first non-CVC (`tosmabru_prefix`).
+///
+/// Therefore any two suffixes with the same [`SuffixInterface`] have identical
+/// future hyphen behaviour for every left extension; keeping only the
+/// minimum-score suffix(es) per interface never drops a globally optimal
+/// completion. Final answers are exactly the forms whose score equals the
+/// global minimum (ties retained).
+fn jvozba_best_only(
+    arr: &[String],
+    forbid_la_lai_doi: bool,
+    forbid_cmevla: bool,
+    options: &RafsiOptions,
+) -> Vec<LujvoAndScore> {
+    let n = arr.len();
+    if n < 2 {
+        return Vec::new();
+    }
+
+    let candid_arr: Vec<Vec<String>> = arr
+        .iter()
+        .enumerate()
+        .map(|(i, selrafsi)| get_candid(selrafsi, i == arr.len() - 1, options))
+        .collect();
+
+    if candid_arr.iter().any(|c| c.is_empty()) {
+        return Vec::new();
+    }
+
+    // layer[interface] = (best_score, component sequences achieving it)
+    let mut layer: HashMap<SuffixInterface, (i32, Vec<Vec<String>>)> = HashMap::new();
+    for rafsi in &candid_arr[n - 1] {
+        let components = vec![rafsi.clone()];
+        let score = get_lujvo_score(&components);
+        insert_best_suffix(&mut layer, suffix_interface(&components), score, components);
+    }
+
+    for i in (0..n - 1).rev() {
+        let mut next_layer: HashMap<SuffixInterface, (i32, Vec<Vec<String>>)> = HashMap::new();
+        let is_first = i == 0;
+        for rafsi in &candid_arr[i] {
+            for (_suf_score, seqs) in layer.values() {
+                for suffix in seqs {
+                    let joined = attach_left(rafsi, suffix, is_first, n);
+                    let score = get_lujvo_score(&joined);
+                    if is_first {
+                        let candidate = LujvoAndScore {
+                            lujvo: joined.join(""),
+                            score,
+                        };
+                        if is_forbidden(&candidate, forbid_la_lai_doi)
+                            || (forbid_cmevla && is_cmevla(&candidate.lujvo))
+                        {
+                            continue;
+                        }
+                    }
+                    insert_best_suffix(
+                        &mut next_layer,
+                        suffix_interface(&joined),
+                        score,
+                        joined,
+                    );
+                }
+            }
+        }
+        layer = next_layer;
+    }
+
+    let mut answers: Vec<LujvoAndScore> = layer
+        .into_values()
+        .flat_map(|(score, seqs)| {
+            seqs.into_iter().map(move |components| LujvoAndScore {
+                lujvo: components.join(""),
+                score,
+            })
+        })
+        .collect();
+
+    if let Some(min_score) = answers.iter().map(|a| a.score).min() {
+        answers.retain(|a| a.score == min_score);
+    }
+    answers.sort_unstable_by(|a, b| a.score.cmp(&b.score).then_with(|| a.lujvo.cmp(&b.lujvo)));
+    answers.dedup_by(|a, b| a.lujvo == b.lujvo);
+    answers
+}
+
+/// Interface of a normalized suffix for DP dominance (see [`jvozba_best_only`]).
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+struct SuffixInterface {
+    head: String,
+    cmevla: bool,
+    /// Start of the suffix through the first non-CVC component (inclusive).
+    /// Empty means the whole suffix is CVC-shaped (tosmabru always false).
+    tosmabru_prefix: Vec<String>,
+}
+
+fn suffix_interface(components: &[String]) -> SuffixInterface {
+    let head = components[0].clone();
+    let cmevla = is_cmevla(components.last().expect("non-empty suffix"));
+    let tosmabru_prefix = match components.iter().position(|s| !is_cvc(s)) {
+        Some(i) => components[..=i].to_vec(),
+        None => Vec::new(),
+    };
+    SuffixInterface {
+        head,
+        cmevla,
+        tosmabru_prefix,
+    }
+}
+
+fn insert_best_suffix(
+    layer: &mut HashMap<SuffixInterface, (i32, Vec<Vec<String>>)>,
+    iface: SuffixInterface,
+    score: i32,
+    components: Vec<String>,
+) {
+    match layer.get_mut(&iface) {
+        None => {
+            layer.insert(iface, (score, vec![components]));
+        }
+        Some((best, seqs)) => {
+            if score < *best {
+                *best = score;
+                seqs.clear();
+                seqs.push(components);
+            } else if score == *best && !seqs.contains(&components) {
+                seqs.push(components);
+            }
+        }
+    }
+}
+
+/// One left-extension step of [`normalize`]: attach `rafsi` onto an already
+/// normalized right-hand component sequence.
+fn attach_left(
+    rafsi: &str,
+    suffix: &[String],
+    is_first: bool,
+    total_rafsi_count: usize,
+) -> Vec<String> {
+    let mut result = suffix.to_vec();
+    let end = rafsi.chars().last().expect("non-empty rafsi");
+    let init = result[0].chars().next().expect("non-empty suffix");
+
+    let y_inserted = if is_4letter(rafsi)
+        || (is_c(end) && is_c(init) && is_permissible(end, init) == 0)
+        || (end == 'n'
+            && ["ts", "tc", "dz", "dj"]
+                .iter()
+                .any(|&s| result[0].starts_with(s)))
+    {
+        result.insert(0, "y".to_string());
+        true
+    } else {
+        false
+    };
+
+    if is_first && is_cvv(rafsi) {
+        let hyphen = if result[0].starts_with('r') { "n" } else { "r" };
+        if total_rafsi_count > 2 || !is_ccv(&result[0]) {
+            result.insert(0, hyphen.to_string());
+        }
+    } else if is_first && !y_inserted && is_cvc(rafsi) && is_tosmabru(rafsi, &result) {
+        result.insert(0, "y".to_string());
+    }
+
+    result.insert(0, rafsi.to_string());
+    result
 }
 
 #[inline]
@@ -225,7 +412,7 @@ mod tests {
             custom_gismu: None,
             custom_gismu_exp: None,
         };
-        let result = jvozba(&input, false, false, &options);
+        let result = jvozba(&input, false, false, false, &options);
 
         assert!(
             !result.is_empty(),
@@ -244,7 +431,7 @@ mod tests {
             custom_gismu: None,
             custom_gismu_exp: None,
         };
-        let result = jvozba(&input, false, false, &options);
+        let result = jvozba(&input, false, false, false, &options);
         assert!(result.is_empty(), "Single word should return empty result");
     }
 
@@ -258,7 +445,7 @@ mod tests {
             custom_gismu: None,
             custom_gismu_exp: None,
         };
-        let result = jvozba(&input, false, false, &options);
+        let result = jvozba(&input, false, false, false, &options);
         assert!(result.is_empty(), "Empty input should return empty result");
     }
 
@@ -272,7 +459,7 @@ mod tests {
             custom_gismu: None,
             custom_gismu_exp: None,
         };
-        let result = jvozba(&input, false, false, &options);
+        let result = jvozba(&input, false, false, false, &options);
         assert!(!result.is_empty(), "Should include experimental rafsi");
     }
 
@@ -292,9 +479,88 @@ mod tests {
             custom_gismu_exp: Some(&custom_gismu_exp),
         };
         
-        let result = jvozba(&input, false, false, &options);
+        let result = jvozba(&input, false, false, false, &options);
         assert!(!result.is_empty(), "Should use custom gismu rafsi");
         assert!(result.iter().any(|r| r.lujvo == "qlagasnu"), "Expected custom rafsi combination");
+    }
+
+    fn default_options() -> RafsiOptions<'static> {
+        RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        }
+    }
+
+    /// Best-only DP must match the min score (and the set of min-score forms)
+    /// of full Cartesian enumeration — the algorithmic correctness oracle.
+    #[test]
+    fn test_jvozba_best_only_matches_full_enumeration() {
+        let options = default_options();
+        let cases = [
+            vec!["klama".into(), "gasnu".into()],
+            vec!["blanu".into(), "zdani".into()],
+            vec!["melbi".into(), "cmalu".into(), "zdani".into()],
+            vec!["broda".into(), "brode".into()],
+            vec!["zukte".into(), "denpa".into()],
+            vec!["tirxu".into(), "broda".into()],
+            vec!["cmavo".into(), "gasnu".into()],
+        ];
+        for input in cases {
+            let full = jvozba(&input, false, true, false, &options);
+            let best = jvozba(&input, false, true, true, &options);
+            assert!(
+                !full.is_empty(),
+                "full enumeration empty for {input:?}"
+            );
+            let min = full[0].score;
+            let full_best: Vec<_> = full
+                .iter()
+                .filter(|r| r.score == min)
+                .map(|r| r.lujvo.clone())
+                .collect();
+            let dp_best: Vec<_> = best.iter().map(|r| r.lujvo.clone()).collect();
+            assert_eq!(
+                full_best, dp_best,
+                "best-only mismatch for {input:?}: full={full_best:?} dp={dp_best:?}"
+            );
+            assert!(
+                best.iter().all(|r| r.score == min),
+                "best-only returned non-minimal score for {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_jvozba_best_only_klagau() {
+        let options = default_options();
+        let input = vec!["klama".to_string(), "gasnu".to_string()];
+        let best = jvozba(&input, false, false, true, &options);
+        assert_eq!(best[0].lujvo, "klagau");
+        assert!(best.iter().all(|r| r.score == best[0].score));
+    }
+
+    #[test]
+    fn test_attach_left_matches_normalize() {
+        let lists = [
+            vec!["kla".into(), "gau".into()],
+            vec!["zuk".into(), "de'a".into()],
+            vec!["slak".into(), "gau".into()],
+            vec!["bra".into(), "mlatu".into()],
+            vec!["toi".into(), "broda".into()],
+            vec!["sel".into(), "kla".into(), "gau".into()],
+        ];
+        for list in lists {
+            let via_normalize = normalize(&list).unwrap();
+            let mut acc = vec![list.last().unwrap().clone()];
+            for (rev_i, rafsi) in list.iter().rev().skip(1).enumerate() {
+                let is_first = rev_i == list.len() - 2;
+                acc = attach_left(rafsi, &acc, is_first, list.len());
+            }
+            assert_eq!(acc, via_normalize, "attach_left diverged for {list:?}");
+        }
     }
 
     #[test]

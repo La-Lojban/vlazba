@@ -202,7 +202,7 @@ fn reconstruct_lujvo_with(
         return Err("Need at least two selrafsi to rebuild lujvo".into());
     }
 
-    let rebuilt = narge::jvozba(&selrafsi_list, false, forbid_cmevla, options)
+    let rebuilt = narge::jvozba(&selrafsi_list, false, forbid_cmevla, true, options)
         .first()
         .ok_or("Failed to rebuild lujvo")?
         .lujvo

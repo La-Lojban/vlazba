@@ -1,3 +1,13 @@
+Version 0.9.0
+
+- jvozba: add `best_only` option — DP search returns only score-optimal
+  lujvo without materializing the full rafsi Cartesian product (provably
+  optimal via SuffixInterface dominance; oracle-tested against full enum)
+- CLI: `--best-only` for `--jvozba`
+- reconstruct_lujvo uses best_only (it only needs the top form)
+
+----
+
 Version 0.8.5
 
 - Rafsi lookup: custom maps override per key; missing keys fall through to
