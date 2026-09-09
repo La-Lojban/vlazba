@@ -476,21 +476,58 @@ mod tests {
         assert!(!a.is_score_optimal);
         assert_eq!(a.canonical, "bramlatu");
     }
+
+    /// Regression: final gismu with an empty short-rafsi list (e.g. `karce`)
+    /// must still reverse-resolve. Without that, `sorprekarce` rebuilt as
+    /// `sorpre` (dropping the car rafsi).
+    #[test]
+    fn test_search_selrafsi_empty_rafsi_list_gismu() {
+        let options = RafsiOptions {
+            exp_rafsi: false,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            search_selrafsi_from_rafsi2("karce", &options),
+            Some("karce".to_string())
+        );
+        assert_eq!(
+            gismu_rafsi_list("karce", false, None, None),
+            Some(Vec::<String>::new())
+        );
+    }
+
+    #[test]
+    fn test_reconstruct_sorprekarce_keeps_karce() {
+        let options = RafsiOptions {
+            exp_rafsi: false,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            reconstruct_lujvo("sorprekarce", true, &options).unwrap(),
+            "sorprekarce"
+        );
+        let a = analyze_lujvo_spelling("sorprekarce", &options).unwrap();
+        assert!(a.is_score_optimal);
+        assert_eq!(a.canonical, "sorprekarce");
+    }
 }
 
 pub fn search_selrafsi_from_rafsi2(
     rafsi: &str,
     options: &RafsiOptions,
 ) -> Option<String> {
-    if let Some(rafsis) = gismu_rafsi_list(
-        rafsi,
-        options.exp_rafsi,
-        options.custom_gismu,
-        options.custom_gismu_exp,
-    ) {
-        if !rafsis.is_empty() {
-            return Some(rafsi.to_owned());
-        }
+    // Full gismu used as a final (or lone) rafsi must resolve to itself even when
+    // `gismu_rafsi_list.json` has an empty short-rafsi list (~422 gismu, e.g.
+    // `karce`). The old check required a non-empty list, so `sorprekarce` lost
+    // `karce` and reconstructed as `sorpre`.
+    if gismu_key_exists(rafsi, options) {
+        return Some(rafsi.to_owned());
     }
 
     if rafsi != "brod" && rafsi.len() == 4 && !rafsi.contains('\'') {
@@ -572,3 +609,4 @@ fn gismu_key_exists(candid: &str, options: &RafsiOptions) -> bool {
     }
     false
 }
+

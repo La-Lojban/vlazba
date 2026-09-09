@@ -1,3 +1,12 @@
+Version 0.9.1
+
+- search_selrafsi_from_rafsi2: treat a known gismu key as itself even when its
+  short-rafsi list is empty (e.g. `karce`). Previously `sorprekarce` failed to
+  resolve the final rafsi and (under older silent-drop reconstruct) rebuilt as
+  `sorpre`.
+
+----
+
 Version 0.9.0
 
 - jvozba: add `best_only` option — DP search returns only score-optimal
