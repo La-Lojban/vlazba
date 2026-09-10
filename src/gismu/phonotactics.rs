@@ -1,33 +1,7 @@
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
+//! Phonotactic constants for gismu generation (CLL).
 
-pub const VERSION: &str = "v0.9.1";
-
-pub static DEFAULT_WEIGHTS_STR: Lazy<String> = Lazy::new(|| {
-    language_weights()
-        .get("1985")
-        .expect("1985 weights should exist")
-        .iter()
-        .map(|&weight| weight.to_string())
-        .collect::<Vec<_>>()
-        .join(",")
-});
-
-pub fn language_weights() -> HashMap<&'static str, Vec<f32>> {
-    [
-        ("1985", vec![0.36, 0.16, 0.21, 0.11, 0.09, 0.07]),
-        ("1987", vec![0.36, 0.156, 0.208, 0.116, 0.087, 0.073]),
-        ("1994", vec![0.348, 0.194, 0.163, 0.123, 0.088, 0.084]),
-        ("1995", vec![0.347, 0.196, 0.16, 0.123, 0.089, 0.085]),
-        ("1999", vec![0.334, 0.195, 0.187, 0.116, 0.081, 0.088]),
-    ]
-    .iter()
-    .cloned()
-    .collect()
-}
-
-pub const C: &str = "bcdfgjklmnprstvxz";
-pub const V: &str = "aeiou";
+use std::collections::HashSet;
+use std::sync::LazyLock;
 
 pub const VALID_CC_INITIALS: &[&str] = &[
     "bl", "br", "cf", "ck", "cl", "cm", "cn", "cp", "cr", "ct", "dj", "dr", "dz", "fl", "fr", "gl",
@@ -36,13 +10,11 @@ pub const VALID_CC_INITIALS: &[&str] = &[
 ];
 
 pub const FORBIDDEN_CC: &[&str] = &["cx", "kx", "xc", "xk", "mz"];
-
 pub const FORBIDDEN_CCC: &[&str] = &["ndj", "ndz", "ntc", "nts"];
 
 pub const SIBILANT: &str = "cjsz";
 pub const VOICED: &str = "bdgjvz";
 pub const UNVOICED: &str = "cfkpstx";
-
 
 pub static SIMILARITIES: [(char, &str); 17] = [
     ('b', "pv"),
@@ -63,3 +35,20 @@ pub static SIMILARITIES: [(char, &str); 17] = [
     ('x', "gk"),
     ('z', "js"),
 ];
+
+pub(crate) static VALID_CC_INITIALS_SET: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| VALID_CC_INITIALS.iter().copied().collect());
+
+pub(crate) static FORBIDDEN_CC_SET: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| FORBIDDEN_CC.iter().copied().collect());
+
+pub(crate) static FORBIDDEN_CCC_SET: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| FORBIDDEN_CCC.iter().copied().collect());
+
+pub(crate) static SIBILANT_SET: LazyLock<HashSet<char>> =
+    LazyLock::new(|| SIBILANT.chars().collect());
+
+pub(crate) static VOICED_SET: LazyLock<HashSet<char>> = LazyLock::new(|| VOICED.chars().collect());
+
+pub(crate) static UNVOICED_SET: LazyLock<HashSet<char>> =
+    LazyLock::new(|| UNVOICED.chars().collect());

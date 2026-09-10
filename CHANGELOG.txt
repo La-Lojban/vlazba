@@ -1,3 +1,26 @@
+Version 1.0.0
+
+- Fix CLI `-d` / `--deduplicate`: pick the best-scoring candidate that does
+  *not* clash with the existing gismu list (was inverted — printed a clashing
+  form as “The winner”; also switched off unordered `par_iter` find)
+- Idiomatic module layout with compatibility aliases for lensisku / 0.9 users:
+  `gismu` (`gismu_utils`), `morphology` (`jvozba`), `decompose` (`jvokaha`),
+  `lookup` (`jvozba::tools`), `cli_support` (`libs`)
+- Errors: `VlazbaError` / `thiserror` instead of `Box<dyn Error>`
+- `JvozbaOptions` + `jvozba_with`; prefer `best_only` for score-optimal forms
+- Performance: Clone-based cartesian product (no JSON deep-clone); `CvInfo`
+  / `cv_shape` without heap; reverse rafsi→selrafsi maps; jvokaha index
+  cursor; VecDeque normalize; O(1) permissibility table
+- Internal renames with public aliases: `rafsi_candidates` (`get_candid`),
+  `resolve_selrafsi` (`search_selrafsi_from_rafsi2`), `cartesian_product`,
+  `lujvo_score` (`get_lujvo_score`), `GismuGenerator::generate` (`iterator`)
+- Edition 2024, `LazyLock` (drop `once_cell`), Cargo features `parallel` +
+  `cli`, drop unused `itertools` / `regex`, dependency bumps
+- Criterion benches (`benches/morphology`); README / install docs for bin name
+  and lean `default-features = false` library use
+
+----
+
 Version 0.9.1
 
 - search_selrafsi_from_rafsi2: treat a known gismu key as itself even when its
@@ -151,4 +174,3 @@ Version 0.1
 Arnt Richard Johansen's original implementation as downloaded from:
 
   http://www.lojban.org/tiki/gismu+scoring+algorithm
-

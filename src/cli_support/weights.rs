@@ -1,16 +1,16 @@
-use regex::Regex;
-use once_cell::sync::Lazy;
+use super::constants::language_weights;
 
-use super::config::language_weights;
-static WEIGHT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\d{4}|finprims)$").unwrap());
+fn is_weight_preset(weights_str: &str) -> bool {
+    (weights_str.len() == 4 && weights_str.bytes().all(|b| b.is_ascii_digit()))
+        || weights_str == "finprims"
+}
 
 pub fn generate_weights(weights_str: &str) -> anyhow::Result<Vec<f32>> {
-    // Replace the existing Regex::new() call with the WEIGHT_REGEX static
-    if WEIGHT_REGEX.is_match(weights_str) {
+    if is_weight_preset(weights_str) {
         language_weights()
             .get(weights_str)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("No weights registered for {}", weights_str))
+            .ok_or_else(|| anyhow::anyhow!("No weights registered for {weights_str}"))
     } else {
         weights_str
             .split(',')

@@ -10,20 +10,21 @@ Implements the gismu clash and jvozba algorithms described in [The Complete Lojb
 ## Features
 
 - Generates gismu based on input from transliterations of words in multiple languages
-- Creates lujvo using the jvozba algorithm
-- Customizable language weighting
-- Efficient Rust implementation
+- Creates lujvo using the jvozba algorithm (full enumeration or score-optimal DP via `best_only`)
+- Decomposes and reconstructs classical lujvo (`jvokaha`, `reconstruct_lujvo`)
+- Customizable language weighting and custom rafsi maps
+- Optional `cli` / `parallel` Cargo features for lean library consumers
 
 ## Installation
 
-1. Ensure you have Rust installed and up to date:
+1. Ensure you have Rust 1.85+ installed:
 
    ```bash
    rustup default stable
    rustup update
    ```
 
-2. Clone the repository and build the project:
+2. Clone and build (CLI needs the default `cli` feature):
 
    ```bash
    git clone https://github.com/la-lojban/vlazba.git
@@ -32,46 +33,62 @@ Implements the gismu clash and jvozba algorithms described in [The Complete Lojb
    ```
 
 3. Install the CLI tool:
+
    ```bash
-   cargo install vlazba --bin gimka
+   cargo install vlazba --features cli
    ```
+
+## Module layout (idiomatic names)
+
+| Preferred | Compatibility alias (lensisku) |
+|-----------|--------------------------------|
+| `gismu` | `gismu_utils` |
+| `morphology` | `jvozba` |
+| `morphology::decompose` | `jvokaha` |
+| `morphology::lookup` | `jvozba::tools` |
+
+Internal helpers use names like `rafsi_candidates`, `resolve_selrafsi`, `cartesian_product`, `cv_shape`, `lujvo_score`; legacy names remain as aliases.
 
 ## As a Library
 
 Add to your Cargo.toml:
+
 ```toml
 [dependencies]
-vlazba = "0.9"
+vlazba = "1.0"
+
+# Lean dependency (no clap):
+# vlazba = { version = "1.0", default-features = false, features = ["parallel"] }
 ```
 
 Basic usage:
+
 ```rust
-use vlazba::jvozba::{jvozba, LujvoAndScore};
+use vlazba::jvozba::{jvozba, jvokaha, tools::RafsiOptions};
 
- let results = jvozba(
-     &["klama".to_string(), "gasnu".to_string()],
-     false,
-     false,
-     true, // best_only: DP search for score-optimal forms only
-     &vlazba::jvozba::tools::RafsiOptions {
-         exp_rafsi: false,
-         custom_cmavo: None,
-         custom_cmavo_exp: None,
-         custom_gismu: None,
-         custom_gismu_exp: None,
-     },
- );
- assert!(results.iter().any(|r| r.lujvo == "klagau"));
+let results = jvozba(
+    &["klama".to_string(), "gasnu".to_string()],
+    false,
+    false,
+    true, // best_only: DP search for score-optimal forms only
+    &RafsiOptions {
+        exp_rafsi: false,
+        custom_cmavo: None,
+        custom_cmavo_exp: None,
+        custom_gismu: None,
+        custom_gismu_exp: None,
+    },
+);
+assert!(results.iter().any(|r| r.lujvo == "klagau"));
 
-// Analyze existing lujvo
-let decomposition = jvokaha::jvokaha("kalga'u").unwrap();
+let decomposition = jvokaha("kalga'u").unwrap();
 ```
+
+Prefer `best_only = true` whenever you only need the score-optimal spelling (e.g. reconstruct / spelling analysis).
 
 ## CLI Usage
 
 ### Gismu Generation
-
-Basic usage:
 
 ```bash
 ./target/release/vlazba "<Mandarin> <Hindi> <English> <Spanish> <Russian> <Arabic>"
@@ -91,94 +108,49 @@ Custom weights:
 
 ### Lujvo Creation (jvozba)
 
-To create lujvo using the jvozba algorithm:
-
-```bash
-./target/release/vlazba --jvozba "<word1> <word2> <word3>"
-```
-
-```bash
-./target/release/vlazba --jvozba --exp-rafsi "<word1> <word2> <word3>"
-```
-
-Examples:
-
 ```bash
 ./target/release/vlazba --jvozba "klama klama gasnu"
-```
-
-```bash
 ./target/release/vlazba --jvozba --best-only "klama gasnu"
-```
-
-```bash
 ./target/release/vlazba --jvozba --exp-rafsi "corci klama gasnu"
 ```
 
 ### Lujvo Reconstruction
 
-To reconstruct a lujvo from its components:
-
-```bash
-./target/release/vlazba --reconstruct "<lujvo>"
-```
-
-Options:
-- `--exp-rafsi`: Include experimental rafsi in reconstruction
-- `--forbid-cmevla`: Forbid cmevla (name words) in reconstruction
-
-Examples:
-
 ```bash
 ./target/release/vlazba --reconstruct "bramlatu"
 ./target/release/vlazba --reconstruct "bardymlatu" --exp-rafsi
-./target/release/vlazba --reconstruct "toirbroda"
 ./target/release/vlazba --reconstruct "toirbroda" --forbid-cmevla
 ```
 
 ### Lujvo Decomposition (jvokaha)
 
-To split lujvo using the jvokaha algorithm:
-
-```bash
-./target/release/vlazba --jvokaha "<lujvo>"
-```
-
-```bash
-./target/release/vlazba --jvokaha --exp-rafsi "<lujvo>"
-```
-
-Examples:
-
 ```bash
 ./target/release/vlazba --jvokaha "klaklagau"
-```
-
-```bash
 ./target/release/vlazba --jvokaha --exp-rafsi "cocklagau"
 ```
 
 ## Options
 
-- `-w, --weights`: Specify custom language weights (default: 0.347,0.196,0.160,0.123,0.089,0.085)
-- `-s, --shapes`: Define gismu candidate shapes (default: "ccvcv,cvccv")
-- `-a, --all-letters`: Use all available letters instead of only those in input words
+- `-w, --weights`: Custom language weights (default: 1985 set) or a year preset (`1995`, …)
+- `-s, --shapes`: Gismu candidate shapes (default: `ccvcv,cvccv`)
+- `-a, --all-letters`: Use all letters instead of only those in input words
 - `-d, --deduplicate`: Path to existing gismu list for deduplication
-- `--jvozba`: Use jvozba function to create lujvo instead of gismu generation
-- `--best-only`: With `--jvozba`, only compute score-optimal lujvo (proven DP; skips full enumeration)
-- `--forbid-la-lai-doi`: Forbid 'la', 'lai', 'doi' in lujvo when using jvozba
-- `--jvokaha`: Use jvokaha function to split lujvo into components
-- `--exp-rafsi`: Include experimental rafsi when generating lujvo
+- `--jvozba`: Create lujvo instead of gismu generation
+- `--best-only`: With `--jvozba`, only score-optimal lujvo (DP)
+- `--forbid-la-lai-doi`: Forbid `la` / `lai` / `doi` in cmevla-shaped lujvo
+- `--jvokaha`: Split lujvo into components
+- `--exp-rafsi`: Include experimental rafsi
+- `--reconstruct` / `--forbid-cmevla`: Reconstruct / forbid cmevla forms
 
 ## Debug
 
 ```bash
-RUST_BACKTRACE=full cargo run -- "uan rakan ekspekt esper predpologa mulud"
+RUST_BACKTRACE=full cargo run --features cli -- "uan rakan ekspekt esper predpologa mulud"
 ```
 
 ## Background
 
-This project is a Rust rewrite of the original [gimyzba](https://github.com/teleological/gimyzba) and its [Python port](https://github.com/lynn/gimyzba). It aims to provide a more efficient and maintainable implementation of the gismu generation algorithm. Additionally it ports [jvozba](https://github.com/sozysozbot/sozysozbot_jvozba/tree/master) algorithm for getting lujvo creation functionality.
+This project is a Rust rewrite of the original [gimyzba](https://github.com/teleological/gimyzba) and its [Python port](https://github.com/lynn/gimyzba). It also ports the [jvozba](https://github.com/sozysozbot/sozysozbot_jvozba/tree/master) algorithm for lujvo creation.
 
 ## Contributing
 
