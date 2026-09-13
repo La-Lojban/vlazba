@@ -1,3 +1,12 @@
+Version 1.0.4
+
+- Preserve the apostrophe before y after vowel-ending fu'ivla rafsi during
+  reconstruction, including diphthongs and compounds with multiple such rafsi.
+  For example, `krakatau'yvalsi` reconstructs to `krakatau'yvla`, not
+  `krakatauyvla` (which camxes can reinterpret using a u glide).
+
+----
+
 Version 1.0.3
 
 - Reconstruct lujvo containing fu'ivla rafsi through the public reconstruction and

@@ -196,8 +196,15 @@ fn reconstruct_with_sources(
             }
         }
         for (i, is_fuhivla) in fuhivla.iter().enumerate().take(fuhivla.len() - 1) {
-            if *is_fuhivla && !glue_choices[i].iter().any(|g| g == "y") {
-                glue_choices[i].push("y".into());
+            if *is_fuhivla {
+                // Camxes can reinterpret a final i/u as the onset glide of y.
+                // Segment text alone does not detect that syllable change:
+                // preserve the vowel-ending rafsi with an explicit h+y boundary.
+                if selected[i].ends_with(['a', 'e', 'i', 'o', 'u']) {
+                    glue_choices[i] = vec!["'y".into()];
+                } else if !glue_choices[i].iter().any(|g| g == "y") {
+                    glue_choices[i].push("y".into());
+                }
             }
         }
         let mut glue_indices = vec![0; glue_choices.len()];
@@ -269,6 +276,24 @@ pub(crate) fn reconstruct_with_inferred_sources(word: &str, options: &RafsiOptio
 mod tests {
     use super::*;
     use camxes_rs::camxes::peg::parsing::Span;
+
+    #[test]
+    fn preserves_vowel_fuhivla_hyphen() {
+        let parser = Peg::new("text", include_str!("lojban.peg")).unwrap();
+        let options = RafsiOptions { exp_rafsi: true, custom_cmavo: None, custom_cmavo_exp: None, custom_gismu: None, custom_gismu_exp: None };
+        for (word, sources, expected) in [
+            ("krakatau'yvalsi", vec!["krakatau", "valsi"], "krakatau'yvla"),
+            ("krakatau'yvla", vec!["krakatau", "valsi"], "krakatau'yvla"),
+            ("krakatu'yvalsi", vec!["krakatu", "valsi"], "krakatu'yvla"),
+            ("krakatai'yvalsi", vec!["krakatai", "valsi"], "krakatai'yvla"),
+            ("klamykrakatau'yvalsi", vec!["klama", "krakatau", "valsi"], "klamykrakatau'yvla"),
+            ("krakatau'ykrakatau'yvalsi", vec!["krakatau", "krakatau", "valsi"], "krakatau'ykrakatau'yvla"),
+        ] {
+            let sources: Vec<String> = sources.into_iter().map(String::from).collect();
+            assert_eq!(reconstruct_fuhivla_lujvo(word, &sources, &parser, &options).as_deref(), Some(expected), "{word}");
+            assert_eq!(crate::morphology::lookup::reconstruct_lujvo(word, true, &options).unwrap(), expected, "{word}");
+        }
+    }
 
     #[test]
     fn reconstruct_inferred_fuhivla_with_shorter_rafsi() {
