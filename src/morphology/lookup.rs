@@ -143,26 +143,34 @@ pub fn reconstruct_lujvo(
     forbid_cmevla: bool,
     options: &RafsiOptions,
 ) -> Result<String> {
-    match reconstruct_lujvo_with(lujvo, forbid_cmevla, options) {
+    let classical = match reconstruct_lujvo_with(lujvo, forbid_cmevla, options) {
         Ok(s) => Ok(s),
         Err(e) => {
             let has_custom = options.custom_cmavo.is_some()
                 || options.custom_cmavo_exp.is_some()
                 || options.custom_gismu.is_some()
                 || options.custom_gismu_exp.is_some();
-            if !has_custom {
-                return Err(e);
+            if has_custom {
+                let builtin = RafsiOptions {
+                    exp_rafsi: options.exp_rafsi,
+                    custom_cmavo: None,
+                    custom_cmavo_exp: None,
+                    custom_gismu: None,
+                    custom_gismu_exp: None,
+                };
+                reconstruct_lujvo_with(lujvo, forbid_cmevla, &builtin)
+            } else {
+                Err(e)
             }
-            let builtin = RafsiOptions {
-                exp_rafsi: options.exp_rafsi,
-                custom_cmavo: None,
-                custom_cmavo_exp: None,
-                custom_gismu: None,
-                custom_gismu_exp: None,
-            };
-            reconstruct_lujvo_with(lujvo, forbid_cmevla, &builtin)
+        }
+    };
+    #[cfg(feature = "camxes")]
+    if classical.is_err() {
+        if let Some(rebuilt) = super::camxes_segments::reconstruct_with_inferred_sources(lujvo, options) {
+            return Ok(rebuilt);
         }
     }
+    classical
 }
 
 fn reconstruct_lujvo_with(
@@ -199,7 +207,7 @@ fn reconstruct_lujvo_with(
     Ok(rebuilt)
 }
 
-/// Score-optimal spelling analysis for a classical lujvo.
+/// Score-optimal spelling analysis for a lujvo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LujvoSpellingAnalysis {
     /// Best-scoring form from the same selrafsi (`reconstruct_lujvo`).
@@ -210,13 +218,11 @@ pub struct LujvoSpellingAnalysis {
 
 /// Compare a lujvo spelling to its score-optimal form.
 ///
-/// Returns `None` if the string is not a classical lujvo (`jvokaha` /
-/// `reconstruct_lujvo` fails even with built-in rafsi lists).
+/// Returns `None` if the string cannot be reconstructed.
 pub fn analyze_lujvo_spelling(
     word: &str,
     options: &RafsiOptions,
 ) -> Option<LujvoSpellingAnalysis> {
-    decompose::jvokaha(word).ok()?;
     let canonical = reconstruct_lujvo(word, true, options).ok()?;
     Some(LujvoSpellingAnalysis {
         is_score_optimal: canonical == word,
@@ -594,5 +600,23 @@ mod tests {
         let a = analyze_lujvo_spelling("sorprekarce", &options).unwrap();
         assert!(a.is_score_optimal);
         assert_eq!(a.canonical, "sorprekarce");
+    }
+
+    #[cfg(feature = "camxes")]
+    #[test]
+    fn test_reconstruct_valsykrakatu() {
+        let options = RafsiOptions {
+            exp_rafsi: false,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(reconstruct_lujvo("valsykrakatu", true, &options).unwrap(), "valykrakatu");
+        assert_eq!(reconstruct_lujvo("tci'ilyfinpe", true, &options).unwrap(), "tci'ilyfi'e");
+        let analysis = analyze_lujvo_spelling("valsykrakatu", &options).unwrap();
+        assert_eq!(analysis.canonical, "valykrakatu");
+        assert!(!analysis.is_score_optimal);
+        assert!(analyze_lujvo_spelling("valykrakatu", &options).unwrap().is_score_optimal);
     }
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use camxes_rs::camxes::peg::parsing::ParseNode;
 use camxes_rs::camxes::peg::{grammar::Peg, parsing::ParseResult};
 use crate::morphology::decompose::jvokaha;
-use crate::morphology::lookup::{rafsi_candidates, RafsiOptions};
+use crate::morphology::lookup::{rafsi_candidates, resolve_selrafsi, RafsiOptions};
 use crate::morphology::score::lujvo_score;
 use crate::morphology::compound::normalize;
 
@@ -115,6 +115,20 @@ pub fn reconstruct_fuhivla_lujvo(
     parser: &Peg,
     options: &RafsiOptions<'_>,
 ) -> Option<String> {
+    let fuhivla: Vec<bool> = source_words.iter().map(|source| {
+        let ParseResult(_, _, _, parsed) = parser.parse(source);
+        parsed.as_ref().as_ref().is_ok_and(|nodes| contains_fuhivla(nodes))
+    }).collect();
+    reconstruct_with_sources(word, source_words, &fuhivla, parser, options)
+}
+
+fn reconstruct_with_sources(
+    word: &str,
+    source_words: &[String],
+    fuhivla: &[bool],
+    parser: &Peg,
+    options: &RafsiOptions<'_>,
+) -> Option<String> {
     if jvokaha(word).is_ok() {
         return None;
     }
@@ -141,18 +155,6 @@ pub fn reconstruct_fuhivla_lujvo(
         return None;
     }
 
-    fn contains_fuhivla(nodes: &[camxes_rs::camxes::peg::parsing::ParseNode]) -> bool {
-        nodes.iter().any(|node| match node {
-            camxes_rs::camxes::peg::parsing::ParseNode::NonTerminal { name, children, .. } => {
-                name == "fuhivla" || contains_fuhivla(children)
-            }
-            _ => false,
-        })
-    }
-    let fuhivla: Vec<bool> = source_words.iter().map(|source| {
-        let ParseResult(_, _, _, parsed) = parser.parse(source);
-        parsed.as_ref().as_ref().is_ok_and(|nodes| contains_fuhivla(nodes))
-    }).collect();
     if !fuhivla.iter().any(|&is_fuhivla| is_fuhivla) {
         return None;
     }
@@ -232,10 +234,50 @@ pub fn reconstruct_fuhivla_lujvo(
     best.map(|(_, word)| word)
 }
 
+fn contains_fuhivla(nodes: &[ParseNode]) -> bool {
+    nodes.iter().any(|node| match node {
+        ParseNode::NonTerminal { name, children, .. } =>
+            name == "fuhivla" || contains_fuhivla(children),
+        _ => false,
+    })
+}
+
+/// Infer known source words and preserve any fu'ivla rafsi in every position.
+pub(crate) fn reconstruct_with_inferred_sources(word: &str, options: &RafsiOptions<'_>) -> Option<String> {
+    let parser = Peg::new("text", include_str!("lojban.peg")).ok()?;
+    let ParseResult(_, _, _, parsed) = parser.parse(word);
+    let segments = lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
+    let rafsi: Vec<_> = segments.iter()
+        .filter(|part| !matches!(part.as_str(), "y" | "'y" | "r" | "n"))
+        .collect();
+    if rafsi.len() < 2 { return None; }
+    let mut sources = Vec::with_capacity(rafsi.len());
+    let mut fuhivla = Vec::with_capacity(rafsi.len());
+    for part in rafsi {
+        if let Some(source) = resolve_selrafsi(part, options) {
+            sources.push(source);
+            fuhivla.push(false);
+        } else {
+            sources.push(part.to_owned());
+            fuhivla.push(true);
+        }
+    }
+    reconstruct_with_sources(word, &sources, &fuhivla, &parser, options)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use camxes_rs::camxes::peg::parsing::Span;
+
+    #[test]
+    fn reconstruct_inferred_fuhivla_with_shorter_rafsi() {
+        let options = RafsiOptions { exp_rafsi: true, custom_cmavo: None, custom_cmavo_exp: None, custom_gismu: None, custom_gismu_exp: None };
+        assert_eq!(reconstruct_with_inferred_sources("valsykrakatu", &options).as_deref(), Some("valykrakatu"));
+        assert_eq!(reconstruct_with_inferred_sources("valykrakatu", &options).as_deref(), Some("valykrakatu"));
+        assert!(lujvo_score(&["val".into(), "y".into(), "krakatu".into()])
+            < lujvo_score(&["vals".into(), "y".into(), "krakatu".into()]));
+    }
 
     fn node(name: &str, start: usize, end: usize, children: Vec<ParseNode>) -> ParseNode {
         ParseNode::NonTerminal {
@@ -273,7 +315,7 @@ mod tests {
 
     #[test]
     fn reconstructs_fuhivla_rafsi_in_multiple_positions() {
-        let grammar = include_str!("../../tests/fixtures/lojban.peg");
+        let grammar = include_str!("lojban.peg");
         let parser = Peg::new("text", grammar).expect("Lojban parser");
         let words = vec!["tci'ile".into(), "finpe".into()];
         let options = RafsiOptions {

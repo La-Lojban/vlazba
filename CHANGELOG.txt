@@ -1,3 +1,11 @@
+Version 1.0.3
+
+- Reconstruct lujvo containing fu'ivla rafsi through the public reconstruction and
+  spelling-analysis APIs. For example, `valsykrakatu` becomes the lower-scoring
+  `valykrakatu`. Enable camxes by default so the CLI supports these words.
+
+----
+
 Version 1.0.2
 
 - Add `reconstruct_fuhivla_lujvo` under the optional `camxes` feature.

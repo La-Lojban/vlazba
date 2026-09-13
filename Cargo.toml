@@ -1,6 +1,6 @@
 [package]
 name = "vlazba"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 rust-version = "1.85"
 authors = ["lagleki <gleki.is.my.name@gmail.com>"]
@@ -26,7 +26,7 @@ harness = false
 required-features = ["parallel"]
 
 [features]
-default = ["parallel", "cli"]
+default = ["parallel", "cli", "camxes"]
 parallel = ["dep:rayon"]
 cli = ["dep:clap", "dep:anyhow"]
 camxes = ["dep:camxes-rs"]
