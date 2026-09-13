@@ -1,4 +1,10 @@
+use std::collections::HashSet;
 use camxes_rs::camxes::peg::parsing::ParseNode;
+use camxes_rs::camxes::peg::{grammar::Peg, parsing::ParseResult};
+use crate::morphology::decompose::jvokaha;
+use crate::morphology::lookup::{rafsi_candidates, RafsiOptions};
+use crate::morphology::score::lujvo_score;
+use crate::morphology::compound::normalize;
 
 /// Collects lujvo rafsi segment strings from the camxes parse tree.
 /// Expands fu'ivla and stressed_*_rafsi into
@@ -65,7 +71,7 @@ pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec
                 if hy_start < e {
                     parts.push((hy_start, input[hy_start..e].to_string()));
                 }
-            } else if name == "stressed_hy_rafsi" || name == "stressed_y_rafsi" {
+            } else if matches!(name.as_str(), "stressed_hy_rafsi" | "stressed_y_rafsi" | "hy_rafsi" | "y_rafsi") {
                 let mut rafsi_end = s;
                 let mut hy_start = e;
                 for n in sub {
@@ -98,6 +104,132 @@ pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec
 
     parts.sort_by_key(|(start, _)| *start);
     Some(parts.into_iter().map(|(_, s)| s).collect())
+}
+
+/// Reconstruct a lujvo containing fu'ivla rafsi from its ordered source words.
+/// Score combinations of known source-word rafsi, accepting only spellings
+/// that camxes parses back into the same ordered components.
+pub fn reconstruct_fuhivla_lujvo(
+    word: &str,
+    source_words: &[String],
+    parser: &Peg,
+    options: &RafsiOptions<'_>,
+) -> Option<String> {
+    if jvokaha(word).is_ok() {
+        return None;
+    }
+    let ParseResult(_, _, _, parsed) = parser.parse(word);
+    let parts = lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
+    let mut original_rafsi = Vec::new();
+    let mut original_glue = Vec::new();
+    for part in parts {
+        if matches!(part.as_str(), "y" | "'y" | "r" | "n") {
+            if original_rafsi.is_empty() { return None; }
+            if original_glue.len() < original_rafsi.len() {
+                original_glue.push(String::new());
+            }
+            original_glue.last_mut().map(|g: &mut String| g.push_str(&part))?;
+        } else {
+            if !original_rafsi.is_empty() && original_glue.len() < original_rafsi.len() {
+                original_glue.push(String::new());
+            }
+            original_rafsi.push(part);
+        }
+    }
+    if original_rafsi.len() < 2 || original_rafsi.len() != source_words.len()
+        || original_glue.len() + 1 != original_rafsi.len() {
+        return None;
+    }
+
+    fn contains_fuhivla(nodes: &[camxes_rs::camxes::peg::parsing::ParseNode]) -> bool {
+        nodes.iter().any(|node| match node {
+            camxes_rs::camxes::peg::parsing::ParseNode::NonTerminal { name, children, .. } => {
+                name == "fuhivla" || contains_fuhivla(children)
+            }
+            _ => false,
+        })
+    }
+    let fuhivla: Vec<bool> = source_words.iter().map(|source| {
+        let ParseResult(_, _, _, parsed) = parser.parse(source);
+        parsed.as_ref().as_ref().is_ok_and(|nodes| contains_fuhivla(nodes))
+    }).collect();
+    if !fuhivla.iter().any(|&is_fuhivla| is_fuhivla) {
+        return None;
+    }
+
+    let choices: Vec<Vec<String>> = source_words.iter().enumerate().map(|(i, source)| {
+        let mut candidates = if fuhivla[i] {
+            vec![if i + 1 == source_words.len() { source.clone() } else { original_rafsi[i].clone() }]
+        } else {
+            rafsi_candidates(source, i + 1 == source_words.len(), options)
+        };
+        if !candidates.contains(&original_rafsi[i]) {
+            candidates.push(original_rafsi[i].clone());
+        }
+        candidates.sort();
+        candidates.dedup();
+        candidates
+    }).collect();
+
+    let mut choice_indices = vec![0; choices.len()];
+    let mut seen = HashSet::new();
+    let mut best: Option<(i32, String)> = None;
+    const MAX_CANDIDATES: usize = 100_000;
+    loop {
+        let selected: Vec<String> = choices.iter().enumerate().map(|(i, c)| c[choice_indices[i]].clone()).collect();
+        let mut glue_choices: Vec<Vec<String>> = original_glue.iter().map(|g| vec![g.clone()]).collect();
+        if let Ok(normalized) = normalize(&selected) {
+            let normalized = normalized.join("");
+            let mut cursor = 0;
+            for (i, rafsi) in selected.iter().enumerate() {
+                if let Some(offset) = normalized[cursor..].find(rafsi) {
+                    if i > 0 {
+                        let glue = normalized[cursor..cursor + offset].to_string();
+                        if !glue_choices[i - 1].contains(&glue) {
+                            glue_choices[i - 1].push(glue);
+                        }
+                    }
+                    cursor += offset + rafsi.len();
+                }
+            }
+        }
+        for (i, is_fuhivla) in fuhivla.iter().enumerate().take(fuhivla.len() - 1) {
+            if *is_fuhivla && !glue_choices[i].iter().any(|g| g == "y") {
+                glue_choices[i].push("y".into());
+            }
+        }
+        let mut glue_indices = vec![0; glue_choices.len()];
+        loop {
+            let mut segments = vec![selected[0].clone()];
+            for i in 0..glue_choices.len() {
+                let glue = &glue_choices[i][glue_indices[i]];
+                if !glue.is_empty() {
+                    segments.push(glue.clone());
+                }
+                segments.push(selected[i + 1].clone());
+            }
+            let candidate = segments.join("");
+            if seen.insert(candidate.clone()) {
+                if seen.len() > MAX_CANDIDATES { return None; }
+                let score = lujvo_score(&segments);
+                if best.as_ref().is_none_or(|current| (score, &candidate) < (current.0, &current.1)) {
+                    let ParseResult(_, _, _, parsed) = parser.parse(&candidate);
+                    if parsed.as_ref().as_ref().ok()
+                        .and_then(|nodes| lujvo_segments_from_nodes(&candidate, nodes))
+                        .is_some_and(|parsed_parts| parsed_parts == segments) {
+                        best = Some((score, candidate));
+                    }
+                }
+            }
+            let Some(i) = (0..glue_indices.len()).rev().find(|&i| glue_indices[i] + 1 < glue_choices[i].len()) else { break; };
+            glue_indices[i] += 1;
+            for index in glue_indices.iter_mut().skip(i + 1) { *index = 0; }
+        }
+        let Some(i) = (0..choice_indices.len()).rev().find(|&i| choice_indices[i] + 1 < choices[i].len()) else { break; };
+        choice_indices[i] += 1;
+        for index in choice_indices.iter_mut().skip(i + 1) { *index = 0; }
+    }
+    best.map(|(_, word)| word)
 }
 
 #[cfg(test)]
@@ -137,5 +269,39 @@ mod tests {
             lujvo_segments_from_nodes("tci'ilyfi'e", &nodes),
             Some(vec!["tci'il".into(), "y".into(), "fi'e".into()])
         );
+    }
+
+    #[test]
+    fn reconstructs_fuhivla_rafsi_in_multiple_positions() {
+        let grammar = include_str!("../../tests/fixtures/lojban.peg");
+        let parser = Peg::new("text", grammar).expect("Lojban parser");
+        let words = vec!["tci'ile".into(), "finpe".into()];
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            reconstruct_fuhivla_lujvo("tci'ilyfinpe", &words, &parser, &options),
+            Some("tci'ilyfi'e".into())
+        );
+        assert_eq!(
+            reconstruct_fuhivla_lujvo("tci'ilyfi'e", &words, &parser, &options),
+            Some("tci'ilyfi'e".into())
+        );
+        for (word, sources, expected) in [
+            ("klamytci'ilyfinpe", vec!["klama", "tci'ile", "finpe"], "klamytci'ilyfi'e"),
+            ("tci'ilyfinpyklama", vec!["tci'ile", "finpe", "klama"], "tci'ilyfipkla"),
+            ("tci'ilytci'ilyfinpe", vec!["tci'ile", "tci'ile", "finpe"], "tci'ilytci'ilyfi'e"),
+        ] {
+            let sources: Vec<String> = sources.into_iter().map(String::from).collect();
+            assert_eq!(
+                reconstruct_fuhivla_lujvo(word, &sources, &parser, &options),
+                Some(expected.into()),
+                "{word}"
+            );
+        }
     }
 }

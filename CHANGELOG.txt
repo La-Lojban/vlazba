@@ -1,3 +1,14 @@
+Version 1.0.2
+
+- Add `reconstruct_fuhivla_lujvo` under the optional `camxes` feature.
+  Reconstruct any number of ordered source words with fu'ivla rafsi in any
+  position by scoring candidate spellings and validating the camxes parse.
+  For example, `tci'ilyfinpe` becomes `tci'ilyfi'e`.
+- Split unstressed `y_rafsi` and `hy_rafsi` into rafsi and hyphen segments
+  so multi-component source-word lookup preserves component boundaries.
+
+----
+
 Version 1.0.1
 
 - Add optional `camxes` feature and `lujvo_segments_from_nodes` to split

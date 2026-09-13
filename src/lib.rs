@@ -60,3 +60,5 @@ pub use morphology::lookup::{
 pub use morphology::score::get_lujvo_score;
 #[cfg(feature = "camxes")]
 pub use morphology::camxes_segments::lujvo_segments_from_nodes;
+#[cfg(feature = "camxes")]
+pub use morphology::camxes_segments::reconstruct_fuhivla_lujvo;
