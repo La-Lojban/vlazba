@@ -1,6 +1,8 @@
 //! Lojban morphology: lujvo generation, decomposition, rafsi lookup, and scoring.
 
 pub mod compound;
+#[cfg(feature = "camxes")]
+pub mod camxes_segments;
 pub mod cv;
 pub mod decompose;
 pub mod lookup;

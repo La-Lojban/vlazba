@@ -58,3 +58,5 @@ pub use morphology::lookup::{
     search_selrafsi_from_rafsi2,
 };
 pub use morphology::score::get_lujvo_score;
+#[cfg(feature = "camxes")]
+pub use morphology::camxes_segments::lujvo_segments_from_nodes;

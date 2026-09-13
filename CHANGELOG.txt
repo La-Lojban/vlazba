@@ -1,3 +1,11 @@
+Version 1.0.1
+
+- Add optional `camxes` feature and `lujvo_segments_from_nodes` to split
+  fu'ivla rafsi from their `y` hyphens for dictionary source-word lookup
+  (e.g. `tci'ilyfi'e` → `tci'il` + `y` + `fi'e`).
+
+----
+
 Version 1.0.0
 
 - Fix CLI `-d` / `--deduplicate`: pick the best-scoring candidate that does
