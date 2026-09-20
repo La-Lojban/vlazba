@@ -1,3 +1,15 @@
+Version 1.0.6
+
+- Add typed camxes lujvo decomposition with `LujvoSegment` and
+  `typed_lujvo_segments_from_nodes`, plus `lujvo_rafsi_from_nodes` for callers
+  that need semantic rafsi without syntactic hyphens.
+- Add unified `decompose_lujvo` and `lujvo_rafsi` entry points that try
+  classical morphology before falling back to a supplied camxes parser.
+- Export `implicit_four_letter_gismu_rafsi` and use it internally so clients do
+  not need to duplicate the five-letter gismu stem rule.
+
+----
+
 Version 1.0.5
 
 - Treat the `y'` separator before a vowel-initial fu'ivla as lujvo glue during

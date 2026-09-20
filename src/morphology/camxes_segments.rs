@@ -10,6 +10,54 @@ fn is_lujvo_hyphen(part: &str) -> bool {
     matches!(part, "y" | "y'" | "'y" | "r" | "n")
 }
 
+/// A morphologically classified segment of a parsed lujvo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LujvoSegment {
+    /// A component rafsi that can be resolved to a source word.
+    Rafsi(String),
+    /// Syntactic glue separating rafsi (`y`, `y'`, `'y`, `r`, or `n`).
+    Hyphen(String),
+}
+
+impl LujvoSegment {
+    /// The segment's original spelling.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Rafsi(text) | Self::Hyphen(text) => text,
+        }
+    }
+
+    /// Consume the segment and return its original spelling.
+    pub fn into_string(self) -> String {
+        match self {
+            Self::Rafsi(text) | Self::Hyphen(text) => text,
+        }
+    }
+}
+
+fn classify_segments(segments: Vec<String>) -> Vec<LujvoSegment> {
+    segments
+        .into_iter()
+        .map(|segment| {
+            if is_lujvo_hyphen(&segment) {
+                LujvoSegment::Hyphen(segment)
+            } else {
+                LujvoSegment::Rafsi(segment)
+            }
+        })
+        .collect()
+}
+
+fn rafsi_only(segments: Vec<LujvoSegment>) -> Vec<String> {
+    segments
+        .into_iter()
+        .filter_map(|segment| match segment {
+            LujvoSegment::Rafsi(rafsi) => Some(rafsi),
+            LujvoSegment::Hyphen(_) => None,
+        })
+        .collect()
+}
+
 /// Collects lujvo rafsi segment strings from the camxes parse tree.
 /// Expands fu'ivla and stressed_*_rafsi into
 /// "rafsi + 'y" / "rafsi + y" / "rafsi + y'" for readable decomposition.
@@ -110,6 +158,36 @@ pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec
     Some(parts.into_iter().map(|(_, s)| s).collect())
 }
 
+/// Collect and classify rafsi and hyphen segments from a camxes parse tree.
+pub fn typed_lujvo_segments_from_nodes(
+    input: &str,
+    nodes: &[ParseNode],
+) -> Option<Vec<LujvoSegment>> {
+    lujvo_segments_from_nodes(input, nodes).map(classify_segments)
+}
+
+/// Collect only semantic rafsi from a camxes lujvo parse tree, omitting glue.
+pub fn lujvo_rafsi_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec<String>> {
+    typed_lujvo_segments_from_nodes(input, nodes).map(rafsi_only)
+}
+
+/// Decompose either a classical or fu'ivla-rafsi lujvo into typed segments.
+///
+/// Classical morphology is attempted first. The supplied camxes parser is
+/// used only when classical decomposition fails.
+pub fn decompose_lujvo(word: &str, parser: &Peg) -> Option<Vec<LujvoSegment>> {
+    if let Ok(segments) = jvokaha(word) {
+        return Some(classify_segments(segments));
+    }
+    let ParseResult(_, _, _, parsed) = parser.parse(word);
+    typed_lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)
+}
+
+/// Decompose either a classical or fu'ivla-rafsi lujvo into semantic rafsi.
+pub fn lujvo_rafsi(word: &str, parser: &Peg) -> Option<Vec<String>> {
+    decompose_lujvo(word, parser).map(rafsi_only)
+}
+
 /// Reconstruct a lujvo containing fu'ivla rafsi from its ordered source words.
 /// Score combinations of known source-word rafsi, accepting only spellings
 /// that camxes parses back into the same ordered components.
@@ -137,21 +215,24 @@ fn reconstruct_with_sources(
         return None;
     }
     let ParseResult(_, _, _, parsed) = parser.parse(word);
-    let parts = lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
+    let parts = typed_lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
     let mut original_rafsi = Vec::new();
     let mut original_glue = Vec::new();
     for part in parts {
-        if is_lujvo_hyphen(&part) {
-            if original_rafsi.is_empty() { return None; }
-            if original_glue.len() < original_rafsi.len() {
-                original_glue.push(String::new());
+        match part {
+            LujvoSegment::Hyphen(glue) => {
+                if original_rafsi.is_empty() { return None; }
+                if original_glue.len() < original_rafsi.len() {
+                    original_glue.push(String::new());
+                }
+                original_glue.last_mut().map(|g: &mut String| g.push_str(&glue))?;
             }
-            original_glue.last_mut().map(|g: &mut String| g.push_str(&part))?;
-        } else {
-            if !original_rafsi.is_empty() && original_glue.len() < original_rafsi.len() {
-                original_glue.push(String::new());
+            LujvoSegment::Rafsi(rafsi) => {
+                if !original_rafsi.is_empty() && original_glue.len() < original_rafsi.len() {
+                    original_glue.push(String::new());
+                }
+                original_rafsi.push(rafsi);
             }
-            original_rafsi.push(part);
         }
     }
     if original_rafsi.len() < 2 || original_rafsi.len() != source_words.len()
@@ -257,19 +338,16 @@ fn contains_fuhivla(nodes: &[ParseNode]) -> bool {
 pub(crate) fn reconstruct_with_inferred_sources(word: &str, options: &RafsiOptions<'_>) -> Option<String> {
     let parser = Peg::new("text", include_str!("lojban.peg")).ok()?;
     let ParseResult(_, _, _, parsed) = parser.parse(word);
-    let segments = lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
-    let rafsi: Vec<_> = segments.iter()
-        .filter(|part| !is_lujvo_hyphen(part))
-        .collect();
+    let rafsi = lujvo_rafsi_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
     if rafsi.len() < 2 { return None; }
     let mut sources = Vec::with_capacity(rafsi.len());
     let mut fuhivla = Vec::with_capacity(rafsi.len());
     for part in rafsi {
-        if let Some(source) = resolve_selrafsi(part, options) {
+        if let Some(source) = resolve_selrafsi(&part, options) {
             sources.push(source);
             fuhivla.push(false);
         } else {
-            sources.push(part.to_owned());
+            sources.push(part);
             fuhivla.push(true);
         }
     }
@@ -358,6 +436,26 @@ mod tests {
         assert_eq!(
             lujvo_segments_from_nodes("criny'alga", nodes),
             Some(vec!["crin".into(), "y'".into(), "alga".into()])
+        );
+        assert_eq!(
+            typed_lujvo_segments_from_nodes("criny'alga", nodes),
+            Some(vec![
+                LujvoSegment::Rafsi("crin".into()),
+                LujvoSegment::Hyphen("y'".into()),
+                LujvoSegment::Rafsi("alga".into()),
+            ])
+        );
+        assert_eq!(
+            lujvo_rafsi_from_nodes("criny'alga", nodes),
+            Some(vec!["crin".into(), "alga".into()])
+        );
+        assert_eq!(
+            lujvo_rafsi("criny'alga", &parser),
+            Some(vec!["crin".into(), "alga".into()])
+        );
+        assert_eq!(
+            lujvo_rafsi("klamyseltru", &parser),
+            Some(vec!["klam".into(), "sel".into(), "tru".into()])
         );
         assert_eq!(
             reconstruct_fuhivla_lujvo(

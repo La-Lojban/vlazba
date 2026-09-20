@@ -16,6 +16,24 @@ pub struct RafsiOptions<'a> {
     pub custom_gismu_exp: Option<&'a HashMap<String, Vec<String>>>,
 }
 
+/// Return the implicit four-letter rafsi of a five-letter vowel-final gismu.
+///
+/// The `brod` stem is excluded because the broda series does not receive this
+/// implicit rafsi. Callers are responsible for supplying a word known to be a
+/// gismu; this helper deliberately does not perform full morphology parsing.
+pub fn implicit_four_letter_gismu_rafsi(gismu: &str) -> Option<String> {
+    let mut chars = gismu.chars();
+    let stem: String = chars.by_ref().take(4).collect();
+    let final_vowel = chars.next()?;
+    if chars.next().is_some()
+        || !matches!(final_vowel, 'a' | 'e' | 'i' | 'o' | 'u')
+        || stem == "brod"
+    {
+        return None;
+    }
+    Some(stem)
+}
+
 /// Cartesian product of candidate lists (clone-based; no JSON roundtrip).
 pub fn cartesian_product<T: Clone>(aa: Vec<Vec<T>>) -> Vec<Vec<T>> {
     if aa.is_empty() {
@@ -120,12 +138,8 @@ pub fn rafsi_candidates(selrafsi: &str, is_last: bool, options: &RafsiOptions) -
             candid.push(gismu.to_string());
         }
 
-        let chopped = gismu
-            .chars()
-            .take(gismu.chars().count() - 1)
-            .collect::<String>();
-        if chopped != "brod" {
-            candid.push(chopped);
+        if let Some(implicit) = implicit_four_letter_gismu_rafsi(gismu) {
+            candid.push(implicit);
         }
         candid
     } else {
@@ -333,6 +347,15 @@ pub fn search_selrafsi_from_rafsi2(rafsi: &str, options: &RafsiOptions) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn implicit_four_letter_rafsi_obeys_gismu_rule() {
+        assert_eq!(implicit_four_letter_gismu_rafsi("blanu").as_deref(), Some("blan"));
+        assert_eq!(implicit_four_letter_gismu_rafsi("mlatu").as_deref(), Some("mlat"));
+        assert_eq!(implicit_four_letter_gismu_rafsi("broda"), None);
+        assert_eq!(implicit_four_letter_gismu_rafsi("blan"), None);
+        assert_eq!(implicit_four_letter_gismu_rafsi("blany"), None);
+    }
 
     #[test]
     fn test_create_every_possibility_cartesian() {
