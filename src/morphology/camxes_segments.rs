@@ -6,9 +6,13 @@ use crate::morphology::lookup::{rafsi_candidates, resolve_selrafsi, RafsiOptions
 use crate::morphology::score::lujvo_score;
 use crate::morphology::compound::normalize;
 
+fn is_lujvo_hyphen(part: &str) -> bool {
+    matches!(part, "y" | "y'" | "'y" | "r" | "n")
+}
+
 /// Collects lujvo rafsi segment strings from the camxes parse tree.
 /// Expands fu'ivla and stressed_*_rafsi into
-/// "rafsi + 'y" / "rafsi + y" for readable decomposition.
+/// "rafsi + 'y" / "rafsi + y" / "rafsi + y'" for readable decomposition.
 pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec<String>> {
     fn find_lujvo_core(nodes: &[ParseNode]) -> Option<&ParseNode> {
         for node in nodes {
@@ -137,7 +141,7 @@ fn reconstruct_with_sources(
     let mut original_rafsi = Vec::new();
     let mut original_glue = Vec::new();
     for part in parts {
-        if matches!(part.as_str(), "y" | "'y" | "r" | "n") {
+        if is_lujvo_hyphen(&part) {
             if original_rafsi.is_empty() { return None; }
             if original_glue.len() < original_rafsi.len() {
                 original_glue.push(String::new());
@@ -255,7 +259,7 @@ pub(crate) fn reconstruct_with_inferred_sources(word: &str, options: &RafsiOptio
     let ParseResult(_, _, _, parsed) = parser.parse(word);
     let segments = lujvo_segments_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
     let rafsi: Vec<_> = segments.iter()
-        .filter(|part| !matches!(part.as_str(), "y" | "'y" | "r" | "n"))
+        .filter(|part| !is_lujvo_hyphen(part))
         .collect();
     if rafsi.len() < 2 { return None; }
     let mut sources = Vec::with_capacity(rafsi.len());
@@ -335,6 +339,39 @@ mod tests {
         assert_eq!(
             lujvo_segments_from_nodes("tci'ilyfi'e", &nodes),
             Some(vec!["tci'il".into(), "y".into(), "fi'e".into()])
+        );
+    }
+
+    #[test]
+    fn reconstructs_y_apostrophe_hyphen_before_vowel_initial_fuhivla() {
+        let parser = Peg::new("text", include_str!("lojban.peg")).expect("Lojban parser");
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        let ParseResult(_, _, _, parsed) = parser.parse("criny'alga");
+        let nodes = parsed.as_ref().as_ref().expect("lujvo parse");
+
+        assert_eq!(
+            lujvo_segments_from_nodes("criny'alga", nodes),
+            Some(vec!["crin".into(), "y'".into(), "alga".into()])
+        );
+        assert_eq!(
+            reconstruct_fuhivla_lujvo(
+                "criny'alga",
+                &["crino".into(), "alga".into()],
+                &parser,
+                &options,
+            ),
+            Some("criny'alga".into())
+        );
+        assert_eq!(
+            crate::morphology::lookup::reconstruct_lujvo("criny'alga", true, &options)
+                .expect("reconstruction"),
+            "criny'alga"
         );
     }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-pub const VERSION: &str = "v1.0.0";
+pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
 pub static DEFAULT_WEIGHTS_STR: LazyLock<String> = LazyLock::new(|| {
     LANGUAGE_WEIGHTS

@@ -1,3 +1,13 @@
+Version 1.0.5
+
+- Treat the `y'` separator before a vowel-initial fu'ivla as lujvo glue during
+  inferred and explicit-source reconstruction. For example, `criny'alga`
+  reconstructs from `crino` + `alga` without treating `y'` as a source rafsi.
+- Derive the CLI version from the Cargo package version so `--version` reports
+  the current release.
+
+----
+
 Version 1.0.4
 
 - Preserve the apostrophe before y after vowel-ending fu'ivla rafsi during
