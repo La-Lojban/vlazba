@@ -104,4 +104,3 @@ impl<'a> GismuScorer<'a> {
             .sum()
     }
 }
-

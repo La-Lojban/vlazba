@@ -1,13 +1,16 @@
-use std::collections::HashSet;
+use crate::morphology::compound::normalize;
+use crate::morphology::decompose::jvokaha;
+use crate::morphology::lookup::{RafsiOptions, rafsi_candidates, resolve_selrafsi};
+use crate::morphology::score::lujvo_score;
 use camxes_rs::camxes::peg::parsing::ParseNode;
 use camxes_rs::camxes::peg::{grammar::Peg, parsing::ParseResult};
-use crate::morphology::decompose::jvokaha;
-use crate::morphology::lookup::{rafsi_candidates, resolve_selrafsi, RafsiOptions};
-use crate::morphology::score::lujvo_score;
-use crate::morphology::compound::normalize;
+use std::cell::RefCell;
+use std::collections::HashSet;
 
 fn is_lujvo_hyphen(part: &str) -> bool {
-    matches!(part, "y" | "y'" | "'y" | "r" | "n")
+    // The morphology parse separates glue from rafsi; every rafsi has at
+    // least three letters, whereas its separated glue has one or two.
+    part.len() < 3
 }
 
 /// A morphologically classified segment of a parsed lujvo.
@@ -123,7 +126,10 @@ pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec
                 if hy_start < e {
                     parts.push((hy_start, input[hy_start..e].to_string()));
                 }
-            } else if matches!(name.as_str(), "stressed_hy_rafsi" | "stressed_y_rafsi" | "hy_rafsi" | "y_rafsi") {
+            } else if matches!(
+                name.as_str(),
+                "stressed_hy_rafsi" | "stressed_y_rafsi" | "hy_rafsi" | "y_rafsi"
+            ) {
                 let mut rafsi_end = s;
                 let mut hy_start = e;
                 for n in sub {
@@ -148,6 +154,9 @@ pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec
                 if hy_start < e {
                     parts.push((hy_start, input[hy_start..e].to_string()));
                 }
+            } else if let Some(hy_start) = trailing_consonant_hyphen(node) {
+                parts.push((s, input[s..hy_start].to_string()));
+                parts.push((hy_start, input[hy_start..e].to_string()));
             } else {
                 parts.push((s, text));
             }
@@ -156,6 +165,46 @@ pub fn lujvo_segments_from_nodes(input: &str, nodes: &[ParseNode]) -> Option<Vec
 
     parts.sort_by_key(|(start, _)| *start);
     Some(parts.into_iter().map(|(_, s)| s).collect())
+}
+
+fn trailing_consonant_hyphen(node: &ParseNode) -> Option<usize> {
+    let ParseNode::NonTerminal {
+        name,
+        span,
+        children,
+    } = node
+    else {
+        return None;
+    };
+    if name == "cvvr" {
+        return children.iter().find_map(|child| match child {
+            ParseNode::NonTerminal {
+                name,
+                span: child_span,
+                ..
+            } if matches!(name.as_str(), "r" | "n") && child_span.1 == span.1 => Some(child_span.0),
+            _ => None,
+        });
+    }
+    children.iter().find_map(trailing_consonant_hyphen)
+}
+
+/// Parse a lujvo with the morphology grammar and return only its rafsi.
+pub(crate) fn parsed_lujvo_rafsi(word: &str) -> Option<Vec<String>> {
+    thread_local! {
+        static PARSER: RefCell<Option<Peg>> = const { RefCell::new(None) };
+    }
+    PARSER.with(|slot| {
+        let mut parser = slot.borrow_mut();
+        if parser.is_none() {
+            *parser = Peg::new("text", include_str!("lojban.peg")).ok();
+        }
+        let ParseResult(_, consumed, _, parsed) = parser.as_ref()?.parse(word);
+        if consumed != word.len() {
+            return None;
+        }
+        lujvo_rafsi_from_nodes(word, parsed.as_ref().as_ref().ok()?)
+    })
 }
 
 /// Collect and classify rafsi and hyphen segments from a camxes parse tree.
@@ -197,10 +246,16 @@ pub fn reconstruct_fuhivla_lujvo(
     parser: &Peg,
     options: &RafsiOptions<'_>,
 ) -> Option<String> {
-    let fuhivla: Vec<bool> = source_words.iter().map(|source| {
-        let ParseResult(_, _, _, parsed) = parser.parse(source);
-        parsed.as_ref().as_ref().is_ok_and(|nodes| contains_fuhivla(nodes))
-    }).collect();
+    let fuhivla: Vec<bool> = source_words
+        .iter()
+        .map(|source| {
+            let ParseResult(_, _, _, parsed) = parser.parse(source);
+            parsed
+                .as_ref()
+                .as_ref()
+                .is_ok_and(|nodes| contains_fuhivla(nodes))
+        })
+        .collect();
     reconstruct_with_sources(word, source_words, &fuhivla, parser, options)
 }
 
@@ -221,11 +276,15 @@ fn reconstruct_with_sources(
     for part in parts {
         match part {
             LujvoSegment::Hyphen(glue) => {
-                if original_rafsi.is_empty() { return None; }
+                if original_rafsi.is_empty() {
+                    return None;
+                }
                 if original_glue.len() < original_rafsi.len() {
                     original_glue.push(String::new());
                 }
-                original_glue.last_mut().map(|g: &mut String| g.push_str(&glue))?;
+                original_glue
+                    .last_mut()
+                    .map(|g: &mut String| g.push_str(&glue))?;
             }
             LujvoSegment::Rafsi(rafsi) => {
                 if !original_rafsi.is_empty() && original_glue.len() < original_rafsi.len() {
@@ -235,8 +294,10 @@ fn reconstruct_with_sources(
             }
         }
     }
-    if original_rafsi.len() < 2 || original_rafsi.len() != source_words.len()
-        || original_glue.len() + 1 != original_rafsi.len() {
+    if original_rafsi.len() < 2
+        || original_rafsi.len() != source_words.len()
+        || original_glue.len() + 1 != original_rafsi.len()
+    {
         return None;
     }
 
@@ -244,27 +305,40 @@ fn reconstruct_with_sources(
         return None;
     }
 
-    let choices: Vec<Vec<String>> = source_words.iter().enumerate().map(|(i, source)| {
-        let mut candidates = if fuhivla[i] {
-            vec![if i + 1 == source_words.len() { source.clone() } else { original_rafsi[i].clone() }]
-        } else {
-            rafsi_candidates(source, i + 1 == source_words.len(), options)
-        };
-        if !candidates.contains(&original_rafsi[i]) {
-            candidates.push(original_rafsi[i].clone());
-        }
-        candidates.sort();
-        candidates.dedup();
-        candidates
-    }).collect();
+    let choices: Vec<Vec<String>> = source_words
+        .iter()
+        .enumerate()
+        .map(|(i, source)| {
+            let mut candidates = if fuhivla[i] {
+                vec![if i + 1 == source_words.len() {
+                    source.clone()
+                } else {
+                    original_rafsi[i].clone()
+                }]
+            } else {
+                rafsi_candidates(source, i + 1 == source_words.len(), options)
+            };
+            if !candidates.contains(&original_rafsi[i]) {
+                candidates.push(original_rafsi[i].clone());
+            }
+            candidates.sort();
+            candidates.dedup();
+            candidates
+        })
+        .collect();
 
     let mut choice_indices = vec![0; choices.len()];
     let mut seen = HashSet::new();
     let mut best: Option<(i32, String)> = None;
     const MAX_CANDIDATES: usize = 100_000;
     loop {
-        let selected: Vec<String> = choices.iter().enumerate().map(|(i, c)| c[choice_indices[i]].clone()).collect();
-        let mut glue_choices: Vec<Vec<String>> = original_glue.iter().map(|g| vec![g.clone()]).collect();
+        let selected: Vec<String> = choices
+            .iter()
+            .enumerate()
+            .map(|(i, c)| c[choice_indices[i]].clone())
+            .collect();
+        let mut glue_choices: Vec<Vec<String>> =
+            original_glue.iter().map(|g| vec![g.clone()]).collect();
         if let Ok(normalized) = normalize(&selected) {
             let normalized = normalized.join("");
             let mut cursor = 0;
@@ -304,42 +378,71 @@ fn reconstruct_with_sources(
             }
             let candidate = segments.join("");
             if seen.insert(candidate.clone()) {
-                if seen.len() > MAX_CANDIDATES { return None; }
+                if seen.len() > MAX_CANDIDATES {
+                    return None;
+                }
                 let score = lujvo_score(&segments);
-                if best.as_ref().is_none_or(|current| (score, &candidate) < (current.0, &current.1)) {
+                if best
+                    .as_ref()
+                    .is_none_or(|current| (score, &candidate) < (current.0, &current.1))
+                {
                     let ParseResult(_, _, _, parsed) = parser.parse(&candidate);
-                    if parsed.as_ref().as_ref().ok()
+                    if parsed
+                        .as_ref()
+                        .as_ref()
+                        .ok()
                         .and_then(|nodes| lujvo_segments_from_nodes(&candidate, nodes))
-                        .is_some_and(|parsed_parts| parsed_parts == segments) {
+                        .is_some_and(|parsed_parts| parsed_parts == segments)
+                    {
                         best = Some((score, candidate));
                     }
                 }
             }
-            let Some(i) = (0..glue_indices.len()).rev().find(|&i| glue_indices[i] + 1 < glue_choices[i].len()) else { break; };
+            let Some(i) = (0..glue_indices.len())
+                .rev()
+                .find(|&i| glue_indices[i] + 1 < glue_choices[i].len())
+            else {
+                break;
+            };
             glue_indices[i] += 1;
-            for index in glue_indices.iter_mut().skip(i + 1) { *index = 0; }
+            for index in glue_indices.iter_mut().skip(i + 1) {
+                *index = 0;
+            }
         }
-        let Some(i) = (0..choice_indices.len()).rev().find(|&i| choice_indices[i] + 1 < choices[i].len()) else { break; };
+        let Some(i) = (0..choice_indices.len())
+            .rev()
+            .find(|&i| choice_indices[i] + 1 < choices[i].len())
+        else {
+            break;
+        };
         choice_indices[i] += 1;
-        for index in choice_indices.iter_mut().skip(i + 1) { *index = 0; }
+        for index in choice_indices.iter_mut().skip(i + 1) {
+            *index = 0;
+        }
     }
     best.map(|(_, word)| word)
 }
 
 fn contains_fuhivla(nodes: &[ParseNode]) -> bool {
     nodes.iter().any(|node| match node {
-        ParseNode::NonTerminal { name, children, .. } =>
-            name == "fuhivla" || contains_fuhivla(children),
+        ParseNode::NonTerminal { name, children, .. } => {
+            name == "fuhivla" || contains_fuhivla(children)
+        }
         _ => false,
     })
 }
 
 /// Infer known source words and preserve any fu'ivla rafsi in every position.
-pub(crate) fn reconstruct_with_inferred_sources(word: &str, options: &RafsiOptions<'_>) -> Option<String> {
+pub(crate) fn reconstruct_with_inferred_sources(
+    word: &str,
+    options: &RafsiOptions<'_>,
+) -> Option<String> {
     let parser = Peg::new("text", include_str!("lojban.peg")).ok()?;
     let ParseResult(_, _, _, parsed) = parser.parse(word);
     let rafsi = lujvo_rafsi_from_nodes(word, parsed.as_ref().as_ref().ok()?)?;
-    if rafsi.len() < 2 { return None; }
+    if rafsi.len() < 2 {
+        return None;
+    }
     let mut sources = Vec::with_capacity(rafsi.len());
     let mut fuhivla = Vec::with_capacity(rafsi.len());
     for part in rafsi {
@@ -360,30 +463,90 @@ mod tests {
     use camxes_rs::camxes::peg::parsing::Span;
 
     #[test]
+    fn parsed_rafsi_omit_parser_identified_glue() {
+        assert_eq!(
+            parsed_lujvo_rafsi("toirbroda"),
+            Some(vec!["toi".into(), "broda".into()])
+        );
+        assert_eq!(
+            parsed_lujvo_rafsi("ro'inre'o"),
+            Some(vec!["ro'i".into(), "re'o".into()])
+        );
+        assert_eq!(
+            parsed_lujvo_rafsi("rivyzu'e"),
+            Some(vec!["riv".into(), "zu'e".into()])
+        );
+    }
+
+    #[test]
     fn preserves_vowel_fuhivla_hyphen() {
         let parser = Peg::new("text", include_str!("lojban.peg")).unwrap();
-        let options = RafsiOptions { exp_rafsi: true, custom_cmavo: None, custom_cmavo_exp: None, custom_gismu: None, custom_gismu_exp: None };
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
         for (word, sources, expected) in [
-            ("krakatau'yvalsi", vec!["krakatau", "valsi"], "krakatau'yvla"),
+            (
+                "krakatau'yvalsi",
+                vec!["krakatau", "valsi"],
+                "krakatau'yvla",
+            ),
             ("krakatau'yvla", vec!["krakatau", "valsi"], "krakatau'yvla"),
             ("krakatu'yvalsi", vec!["krakatu", "valsi"], "krakatu'yvla"),
-            ("krakatai'yvalsi", vec!["krakatai", "valsi"], "krakatai'yvla"),
-            ("klamykrakatau'yvalsi", vec!["klama", "krakatau", "valsi"], "klamykrakatau'yvla"),
-            ("krakatau'ykrakatau'yvalsi", vec!["krakatau", "krakatau", "valsi"], "krakatau'ykrakatau'yvla"),
+            (
+                "krakatai'yvalsi",
+                vec!["krakatai", "valsi"],
+                "krakatai'yvla",
+            ),
+            (
+                "klamykrakatau'yvalsi",
+                vec!["klama", "krakatau", "valsi"],
+                "klamykrakatau'yvla",
+            ),
+            (
+                "krakatau'ykrakatau'yvalsi",
+                vec!["krakatau", "krakatau", "valsi"],
+                "krakatau'ykrakatau'yvla",
+            ),
         ] {
             let sources: Vec<String> = sources.into_iter().map(String::from).collect();
-            assert_eq!(reconstruct_fuhivla_lujvo(word, &sources, &parser, &options).as_deref(), Some(expected), "{word}");
-            assert_eq!(crate::morphology::lookup::reconstruct_lujvo(word, true, &options).unwrap(), expected, "{word}");
+            assert_eq!(
+                reconstruct_fuhivla_lujvo(word, &sources, &parser, &options).as_deref(),
+                Some(expected),
+                "{word}"
+            );
+            assert_eq!(
+                crate::morphology::lookup::reconstruct_lujvo(word, true, &options).unwrap(),
+                expected,
+                "{word}"
+            );
         }
     }
 
     #[test]
     fn reconstruct_inferred_fuhivla_with_shorter_rafsi() {
-        let options = RafsiOptions { exp_rafsi: true, custom_cmavo: None, custom_cmavo_exp: None, custom_gismu: None, custom_gismu_exp: None };
-        assert_eq!(reconstruct_with_inferred_sources("valsykrakatu", &options).as_deref(), Some("valykrakatu"));
-        assert_eq!(reconstruct_with_inferred_sources("valykrakatu", &options).as_deref(), Some("valykrakatu"));
-        assert!(lujvo_score(&["val".into(), "y".into(), "krakatu".into()])
-            < lujvo_score(&["vals".into(), "y".into(), "krakatu".into()]));
+        let options = RafsiOptions {
+            exp_rafsi: true,
+            custom_cmavo: None,
+            custom_cmavo_exp: None,
+            custom_gismu: None,
+            custom_gismu_exp: None,
+        };
+        assert_eq!(
+            reconstruct_with_inferred_sources("valsykrakatu", &options).as_deref(),
+            Some("valykrakatu")
+        );
+        assert_eq!(
+            reconstruct_with_inferred_sources("valykrakatu", &options).as_deref(),
+            Some("valykrakatu")
+        );
+        assert!(
+            lujvo_score(&["val".into(), "y".into(), "krakatu".into()])
+                < lujvo_score(&["vals".into(), "y".into(), "krakatu".into()])
+        );
     }
 
     fn node(name: &str, start: usize, end: usize, children: Vec<ParseNode>) -> ParseNode {
@@ -494,9 +657,21 @@ mod tests {
             Some("tci'ilyfi'e".into())
         );
         for (word, sources, expected) in [
-            ("klamytci'ilyfinpe", vec!["klama", "tci'ile", "finpe"], "klamytci'ilyfi'e"),
-            ("tci'ilyfinpyklama", vec!["tci'ile", "finpe", "klama"], "tci'ilyfipkla"),
-            ("tci'ilytci'ilyfinpe", vec!["tci'ile", "tci'ile", "finpe"], "tci'ilytci'ilyfi'e"),
+            (
+                "klamytci'ilyfinpe",
+                vec!["klama", "tci'ile", "finpe"],
+                "klamytci'ilyfi'e",
+            ),
+            (
+                "tci'ilyfinpyklama",
+                vec!["tci'ile", "finpe", "klama"],
+                "tci'ilyfipkla",
+            ),
+            (
+                "tci'ilytci'ilyfinpe",
+                vec!["tci'ile", "tci'ile", "finpe"],
+                "tci'ilytci'ilyfi'e",
+            ),
         ] {
             let sources: Vec<String> = sources.into_iter().map(String::from).collect();
             assert_eq!(

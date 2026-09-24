@@ -70,8 +70,8 @@ impl std::fmt::Display for CvInfo {
 const fn class_byte(b: u8) -> u8 {
     match b {
         b'a' | b'e' | b'i' | b'o' | b'u' => b'V',
-        b'b' | b'c' | b'd' | b'f' | b'g' | b'j' | b'k' | b'l' | b'm' | b'n' | b'p' | b'r' | b's'
-        | b't' | b'v' | b'x' | b'z' => b'C',
+        b'b' | b'c' | b'd' | b'f' | b'g' | b'j' | b'k' | b'l' | b'm' | b'n' | b'p' | b'r'
+        | b's' | b't' | b'v' | b'x' | b'z' => b'C',
         b'\'' => b'\'',
         b'y' => b'Y',
         _ => 0,
@@ -133,8 +133,22 @@ pub fn cv_shape_string(v: &str) -> String {
 pub fn is_consonant(c: char) -> bool {
     matches!(
         c,
-        'b' | 'c' | 'd' | 'f' | 'g' | 'j' | 'k' | 'l' | 'm' | 'n' | 'p' | 'r' | 's' | 't' | 'v'
-            | 'x' | 'z'
+        'b' | 'c'
+            | 'd'
+            | 'f'
+            | 'g'
+            | 'j'
+            | 'k'
+            | 'l'
+            | 'm'
+            | 'n'
+            | 'p'
+            | 'r'
+            | 's'
+            | 't'
+            | 'v'
+            | 'x'
+            | 'z'
     )
 }
 

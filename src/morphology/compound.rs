@@ -157,12 +157,7 @@ fn jvozba_best_only(selrafsi: &[String], opts: &JvozbaOptions<'_>) -> Vec<LujvoA
                             continue;
                         }
                     }
-                    insert_best_suffix(
-                        &mut next_layer,
-                        suffix_interface(&joined),
-                        score,
-                        joined,
-                    );
+                    insert_best_suffix(&mut next_layer, suffix_interface(&joined), score, joined);
                 }
             }
         }
@@ -258,7 +253,10 @@ fn attach_left(
         if total_rafsi_count > 2 || !is_ccv(&result[0]) {
             result.push_front(hyphen.to_string());
         }
-    } else if is_first && !y_inserted && is_cvc(rafsi) && is_tosmabru(rafsi, result.make_contiguous())
+    } else if is_first
+        && !y_inserted
+        && is_cvc(rafsi)
+        && is_tosmabru(rafsi, result.make_contiguous())
     {
         result.push_front("y".to_string());
     }

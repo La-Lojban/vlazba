@@ -1,6 +1,6 @@
 use crate::error::{Result, VlazbaError};
-use crate::morphology::cv::{CvInfo, cv_shape};
 use crate::morphology::compound::normalize;
+use crate::morphology::cv::{CvInfo, cv_shape};
 
 /// Split a lujvo into its constituent rafsi (including single-letter hyphens).
 ///

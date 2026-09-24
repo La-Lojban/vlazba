@@ -1,3 +1,19 @@
+Version 1.0.11
+
+- Add `expand_lujvo` and `expand_lujvo_into_tanru` to expose a lujvo's
+  source words. Tanru expansion uses camxes-rs with the existing morphology
+  grammar to identify rafsi and glue, including `r` and `n` hyphens.
+- Add camxes-rs full-grammar analysis for trivial SE lujvo. One or more
+  initial SE must scope over a single top-level tanru unit; imported SE word
+  sets are supported with the standard SE words as a fallback. For example,
+  `selpa'i`, `selnunsle`, and `selkempa'isle` qualify, while `selpa'isle`
+  does not.
+- Add spelling-independent expansion keys for related forms. `pamsle`,
+  `pa'isle`, and `selkempa'isle` share a trivial expansion key; `vlakra` and
+  `valkra` share their source-word expansion key.
+
+----
+
 Version 1.0.6
 
 - Add typed camxes lujvo decomposition with `LujvoSegment` and

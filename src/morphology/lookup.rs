@@ -180,11 +180,59 @@ pub fn reconstruct_lujvo(
     };
     #[cfg(feature = "camxes")]
     if classical.is_err() {
-        if let Some(rebuilt) = super::camxes_segments::reconstruct_with_inferred_sources(lujvo, options) {
+        if let Some(rebuilt) =
+            super::camxes_segments::reconstruct_with_inferred_sources(lujvo, options)
+        {
             return Ok(rebuilt);
         }
     }
     classical
+}
+
+/// Expand a lujvo into its source words, omitting morphological hyphens.
+pub fn expand_lujvo(lujvo: &str, options: &RafsiOptions) -> Result<Vec<String>> {
+    let rafsi_list = decompose::jvokaha(lujvo)?;
+    let mut sources = Vec::new();
+    for rafsi in rafsi_list {
+        if matches!(rafsi.as_str(), "y" | "r" | "n") {
+            continue;
+        }
+        let source =
+            resolve_selrafsi(&rafsi, options).ok_or_else(|| VlazbaError::UnresolvedRafsi {
+                rafsi,
+                lujvo: lujvo.to_string(),
+            })?;
+        sources.push(source);
+    }
+    if sources.len() < 2 {
+        return Err(VlazbaError::TooFewSelrafsi);
+    }
+    Ok(sources)
+}
+
+/// Expand a lujvo into a space-separated tanru of its source words.
+pub fn expand_lujvo_into_tanru(lujvo: &str, options: &RafsiOptions) -> Result<String> {
+    #[cfg(feature = "camxes")]
+    let rafsi = super::camxes_segments::parsed_lujvo_rafsi(lujvo)
+        .ok_or_else(|| VlazbaError::Decompose(lujvo.to_string()))?;
+    #[cfg(not(feature = "camxes"))]
+    let rafsi = decompose::jvokaha(lujvo)?
+        .into_iter()
+        .filter(|part| part.len() >= 3)
+        .collect::<Vec<_>>();
+    let mut sources = Vec::with_capacity(rafsi.len());
+    for part in rafsi {
+        let source =
+            resolve_selrafsi(&part, options).ok_or_else(|| VlazbaError::UnresolvedRafsi {
+                rafsi: part,
+                lujvo: lujvo.to_string(),
+            })?;
+        sources.push(source);
+    }
+    if sources.len() < 2 {
+        return Err(VlazbaError::TooFewSelrafsi);
+    }
+    Ok(sources.join(" "))
 }
 
 fn reconstruct_lujvo_with(
@@ -192,26 +240,7 @@ fn reconstruct_lujvo_with(
     forbid_cmevla: bool,
     options: &RafsiOptions,
 ) -> Result<String> {
-    let rafsi_list = decompose::jvokaha(lujvo)?;
-
-    let mut selrafsi_list = Vec::new();
-    for rafsi in &rafsi_list {
-        if rafsi == "y" || rafsi == "r" || rafsi == "n" {
-            continue;
-        }
-        let Some(selrafsi) = resolve_selrafsi(rafsi, options) else {
-            return Err(VlazbaError::UnresolvedRafsi {
-                rafsi: rafsi.clone(),
-                lujvo: lujvo.to_string(),
-            });
-        };
-        selrafsi_list.push(selrafsi);
-    }
-
-    if selrafsi_list.len() < 2 {
-        return Err(VlazbaError::TooFewSelrafsi);
-    }
-
+    let selrafsi_list = expand_lujvo(lujvo, options)?;
     let rebuilt = compound::jvozba(&selrafsi_list, false, forbid_cmevla, true, options)
         .first()
         .ok_or(VlazbaError::RebuildFailed)?
@@ -233,10 +262,7 @@ pub struct LujvoSpellingAnalysis {
 /// Compare a lujvo spelling to its score-optimal form.
 ///
 /// Returns `None` if the string cannot be reconstructed.
-pub fn analyze_lujvo_spelling(
-    word: &str,
-    options: &RafsiOptions,
-) -> Option<LujvoSpellingAnalysis> {
+pub fn analyze_lujvo_spelling(word: &str, options: &RafsiOptions) -> Option<LujvoSpellingAnalysis> {
     let canonical = reconstruct_lujvo(word, true, options).ok()?;
     Some(LujvoSpellingAnalysis {
         is_score_optimal: canonical == word,
@@ -327,8 +353,6 @@ fn gismu_key_exists(candid: &str, options: &RafsiOptions) -> bool {
     false
 }
 
-
-
 /// Compatibility alias.
 pub fn create_every_possibility<T: Clone>(aa: Vec<Vec<T>>) -> Vec<Vec<T>> {
     cartesian_product(aa)
@@ -350,8 +374,14 @@ mod tests {
 
     #[test]
     fn implicit_four_letter_rafsi_obeys_gismu_rule() {
-        assert_eq!(implicit_four_letter_gismu_rafsi("blanu").as_deref(), Some("blan"));
-        assert_eq!(implicit_four_letter_gismu_rafsi("mlatu").as_deref(), Some("mlat"));
+        assert_eq!(
+            implicit_four_letter_gismu_rafsi("blanu").as_deref(),
+            Some("blan")
+        );
+        assert_eq!(
+            implicit_four_letter_gismu_rafsi("mlatu").as_deref(),
+            Some("mlat")
+        );
         assert_eq!(implicit_four_letter_gismu_rafsi("broda"), None);
         assert_eq!(implicit_four_letter_gismu_rafsi("blan"), None);
         assert_eq!(implicit_four_letter_gismu_rafsi("blany"), None);
@@ -476,14 +506,8 @@ mod tests {
             custom_gismu: Some(&custom_gismu),
             custom_gismu_exp: None,
         };
-        assert_eq!(
-            resolve_selrafsi("klu", &options),
-            Some("klum".to_string())
-        );
-        assert_eq!(
-            resolve_selrafsi("zuk", &options),
-            Some("zukte".to_string())
-        );
+        assert_eq!(resolve_selrafsi("klu", &options), Some("klum".to_string()));
+        assert_eq!(resolve_selrafsi("zuk", &options), Some("zukte".to_string()));
     }
 
     #[test]
@@ -635,11 +659,21 @@ mod tests {
             custom_gismu: None,
             custom_gismu_exp: None,
         };
-        assert_eq!(reconstruct_lujvo("valsykrakatu", true, &options).unwrap(), "valykrakatu");
-        assert_eq!(reconstruct_lujvo("tci'ilyfinpe", true, &options).unwrap(), "tci'ilyfi'e");
+        assert_eq!(
+            reconstruct_lujvo("valsykrakatu", true, &options).unwrap(),
+            "valykrakatu"
+        );
+        assert_eq!(
+            reconstruct_lujvo("tci'ilyfinpe", true, &options).unwrap(),
+            "tci'ilyfi'e"
+        );
         let analysis = analyze_lujvo_spelling("valsykrakatu", &options).unwrap();
         assert_eq!(analysis.canonical, "valykrakatu");
         assert!(!analysis.is_score_optimal);
-        assert!(analyze_lujvo_spelling("valykrakatu", &options).unwrap().is_score_optimal);
+        assert!(
+            analyze_lujvo_spelling("valykrakatu", &options)
+                .unwrap()
+                .is_score_optimal
+        );
     }
 }

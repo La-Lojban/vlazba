@@ -1,13 +1,15 @@
 //! Lojban morphology: lujvo generation, decomposition, rafsi lookup, and scoring.
 
-pub mod compound;
 #[cfg(feature = "camxes")]
 pub mod camxes_segments;
+pub mod compound;
 pub mod cv;
 pub mod decompose;
 pub mod lookup;
 pub mod rafsi_tables;
 pub mod score;
+#[cfg(feature = "camxes")]
+pub mod trivial_se;
 
 // --- Public module aliases (lensisku / crates.io compatibility) ---
 

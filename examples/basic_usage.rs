@@ -1,4 +1,4 @@
-use vlazba::{jvozba, jvokaha};
+use vlazba::{jvokaha, jvozba};
 
 fn main() {
     // Generate lujvo candidates
@@ -13,9 +13,9 @@ fn main() {
             custom_cmavo_exp: None,
             custom_gismu: None,
             custom_gismu_exp: None,
-        }
+        },
     );
-    
+
     println!("Top lujvo candidate: {}", results[0].lujvo);
 
     // Analyze existing lujvo

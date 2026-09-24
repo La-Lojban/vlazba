@@ -5,15 +5,13 @@ use std::{
     fs::File,
     io::{self, BufRead, BufReader},
 };
-use vlazba::cli_support::{
-    C, DEFAULT_WEIGHTS_STR, V, VERSION,
-};
 #[cfg(feature = "cli")]
 use vlazba::cli_support::weights::{generate_weights, validate_words};
+use vlazba::cli_support::{C, DEFAULT_WEIGHTS_STR, V, VERSION};
 use vlazba::gismu::{GismuGenerator, GismuMatcher, GismuScorer};
 use vlazba::jvozba::{
     jvokaha, jvozba,
-    tools::{reconstruct_lujvo, search_selrafsi_from_rafsi2, RafsiOptions},
+    tools::{RafsiOptions, reconstruct_lujvo, search_selrafsi_from_rafsi2},
 };
 
 #[cfg(feature = "parallel")]
@@ -315,8 +313,8 @@ fn deduplicate_candidates(
     scores: &[(f32, &String, SmallVec<[f32; 6]>)],
 ) -> Option<String> {
     // Sequential: scores are sorted best-first; parallel any-order would pick randomly.
-    scores.iter().find_map(|(_, candidate, _)| {
-        match matcher.find_similar_gismu(candidate) {
+    scores.iter().find_map(
+        |(_, candidate, _)| match matcher.find_similar_gismu(candidate) {
             Some(gismu) => {
                 log(&format!(
                     "Candidate '{candidate}' too much like gismu '{gismu}'."
@@ -324,8 +322,8 @@ fn deduplicate_candidates(
                 None
             }
             None => Some((*candidate).clone()),
-        }
-    })
+        },
+    )
 }
 
 fn read_gismu_list(path: &str) -> io::Result<Vec<String>> {
@@ -345,10 +343,7 @@ mod tests {
         let matcher = GismuMatcher::new(&gismus, Some(4));
         let a = "bard".to_string();
         let b = "zzzz".to_string();
-        let scores = [
-            (2.0, &a, smallvec![1.0]),
-            (1.0, &b, smallvec![0.0]),
-        ];
+        let scores = [(2.0, &a, smallvec![1.0]), (1.0, &b, smallvec![0.0])];
         assert_eq!(
             deduplicate_candidates(&matcher, &scores).as_deref(),
             Some("zzzz")

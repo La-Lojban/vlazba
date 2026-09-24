@@ -2,7 +2,7 @@ use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use vlazba::jvozba::{
     jvokaha::jvokaha,
     jvozba,
-    tools::{analyze_lujvo_spelling, search_selrafsi_from_rafsi2, RafsiOptions},
+    tools::{RafsiOptions, analyze_lujvo_spelling, search_selrafsi_from_rafsi2},
 };
 
 fn opts() -> RafsiOptions<'static> {

@@ -4,7 +4,7 @@
 use rayon::prelude::*;
 
 use super::phonotactics::{
-    FORBIDDEN_CCC_SET, FORBIDDEN_CC_SET, SIBILANT_SET, UNVOICED_SET, VALID_CC_INITIALS_SET,
+    FORBIDDEN_CC_SET, FORBIDDEN_CCC_SET, SIBILANT_SET, UNVOICED_SET, VALID_CC_INITIALS_SET,
     VOICED_SET,
 };
 
@@ -137,4 +137,3 @@ impl GismuGenerator {
         move |x| !VALID_CC_INITIALS_SET.contains(&x[i..=i + 1])
     }
 }
-

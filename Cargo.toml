@@ -1,6 +1,6 @@
 [package]
 name = "vlazba"
-version = "1.0.6"
+version = "1.0.11"
 edition = "2024"
 rust-version = "1.85"
 authors = ["lagleki <gleki.is.my.name@gmail.com>"]

@@ -52,16 +52,20 @@ pub mod libs {
 
 pub use error::{Result, VlazbaError};
 pub use gismu::{GismuGenerator, GismuMatcher, GismuScorer};
+#[cfg(feature = "camxes")]
+pub use morphology::camxes_segments::reconstruct_fuhivla_lujvo;
+#[cfg(feature = "camxes")]
+pub use morphology::camxes_segments::{
+    LujvoSegment, decompose_lujvo, lujvo_rafsi, lujvo_rafsi_from_nodes, lujvo_segments_from_nodes,
+    typed_lujvo_segments_from_nodes,
+};
 pub use morphology::compound::{JvozbaOptions, LujvoAndScore, jvozba_with};
 pub use morphology::lookup::{
-    LujvoSpellingAnalysis, analyze_lujvo_spelling, get_candid,
-    implicit_four_letter_gismu_rafsi, reconstruct_lujvo, search_selrafsi_from_rafsi2,
+    LujvoSpellingAnalysis, analyze_lujvo_spelling, expand_lujvo, expand_lujvo_into_tanru,
+    get_candid, implicit_four_letter_gismu_rafsi, reconstruct_lujvo, search_selrafsi_from_rafsi2,
 };
 pub use morphology::score::get_lujvo_score;
 #[cfg(feature = "camxes")]
-pub use morphology::camxes_segments::{
-    LujvoSegment, decompose_lujvo, lujvo_rafsi, lujvo_rafsi_from_nodes,
-    lujvo_segments_from_nodes, typed_lujvo_segments_from_nodes,
+pub use morphology::trivial_se::{
+    expansion_key, trivial_expansion_key, trivial_se_base, trivial_se_base_expansion,
 };
-#[cfg(feature = "camxes")]
-pub use morphology::camxes_segments::reconstruct_fuhivla_lujvo;
